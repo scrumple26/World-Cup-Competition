@@ -12,10 +12,15 @@ import { KnockoutPredictions } from "./KnockoutPredictions";
 type Mode = "group" | "flash";
 type Stage = "group" | "knockout";
 
-export function PredictionsClient() {
+export function PredictionsClient({
+  actAs,
+}: {
+  actAs?: { uid: string; teamName: string };
+}) {
   const { user } = useAuth();
   const { data, loading, error } = useWcData();
   const groups = data?.groups ?? [];
+  const targetUid = actAs?.uid ?? user?.uid;
   const {
     loaded,
     matches,
@@ -25,7 +30,7 @@ export function PredictionsClient() {
     setMatch,
     setOrder,
     toggleThird,
-  } = usePredictions(user?.uid, groups);
+  } = usePredictions(targetUid, groups);
 
   const [mode, setMode] = useState<Mode>("group");
   const [stage, setStage] = useState<Stage>("group");
@@ -46,6 +51,12 @@ export function PredictionsClient() {
 
   return (
     <div className="space-y-5">
+      {actAs && (
+        <div className="rounded-lg bg-[var(--gold)]/10 px-4 py-2 text-sm text-[var(--gold)]">
+          Admin: editing predictions for <b>{actAs.teamName}</b>. Changes save to
+          their account.
+        </div>
+      )}
       <div className="flex rounded-lg border border-[var(--border)] p-1 sm:w-fit">
         {(
           [

@@ -3,6 +3,7 @@ import { getFixtures, getStandings } from "@/lib/apiFootball";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toWcMatch, toGroupStandings } from "@/lib/wcMap";
 import { recomputeAllScores } from "@/lib/serverScoring";
+import { requireAdmin } from "@/lib/firebase/requireAdmin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -17,7 +18,9 @@ async function handle(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization");
   const keyParam = req.nextUrl.searchParams.get("key");
-  if (secret && auth !== `Bearer ${secret}` && keyParam !== secret) {
+  const secretOk = secret && (auth === `Bearer ${secret}` || keyParam === secret);
+  // Cron secret OR an admin user token may trigger a sync.
+  if (!secretOk && !(await requireAdmin(req))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

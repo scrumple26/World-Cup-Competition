@@ -13,6 +13,29 @@ import type {
 } from "./types";
 import * as mock from "./mock/store";
 
+/**
+ * In Firebase mode, writing predictions for a uid other than the signed-in user
+ * (admin acting on someone's behalf) is blocked by security rules, so it routes
+ * through the admin API. Returns true if it handled the write.
+ */
+async function adminWriteIfForOther(
+  uid: string,
+  type: "match" | "group" | "third",
+  payload: unknown,
+): Promise<boolean> {
+  const { getClientAuth } = await import("./firebase/client");
+  const auth = getClientAuth();
+  const current = auth?.currentUser;
+  if (!current || current.uid === uid) return false;
+  const token = await current.getIdToken();
+  await fetch("/api/admin/predict", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ uid, type, payload }),
+  });
+  return true;
+}
+
 export async function loadMatchPredictions(
   uid: string,
 ): Promise<Record<number, MatchPrediction>> {
@@ -35,6 +58,7 @@ export async function saveMatchPrediction(
   pred: MatchPrediction,
 ): Promise<void> {
   if (USE_MOCK) return mock.saveMatchPrediction(uid, pred);
+  if (await adminWriteIfForOther(uid, "match", pred)) return;
   const { getClientDb } = await import("./firebase/client");
   const { doc, setDoc } = await import("firebase/firestore");
   const db = getClientDb();
@@ -68,6 +92,7 @@ export async function saveGroupPrediction(
   pred: GroupPrediction,
 ): Promise<void> {
   if (USE_MOCK) return mock.saveGroupPrediction(uid, pred);
+  if (await adminWriteIfForOther(uid, "group", pred)) return;
   const { getClientDb } = await import("./firebase/client");
   const { doc, setDoc } = await import("firebase/firestore");
   const db = getClientDb();
@@ -93,6 +118,7 @@ export async function saveThirdPlace(
   pred: ThirdPlacePrediction,
 ): Promise<void> {
   if (USE_MOCK) return mock.saveThirdPlacePrediction(uid, pred);
+  if (await adminWriteIfForOther(uid, "third", pred)) return;
   const { getClientDb } = await import("./firebase/client");
   const { doc, setDoc } = await import("firebase/firestore");
   const db = getClientDb();
