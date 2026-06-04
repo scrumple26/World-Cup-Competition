@@ -122,13 +122,15 @@ export async function PATCH(req: NextRequest) {
     firstName?: string;
     lastName?: string;
     teamName?: string;
+    hideScores?: boolean;
   };
 
-  const updates: Record<string, string> = {};
-  if (body.logoUrl)  updates.logoUrl  = body.logoUrl;
-  if (body.firstName?.trim()) updates.firstName = body.firstName.trim();
-  if (body.lastName?.trim())  updates.lastName  = body.lastName.trim();
-  if (body.teamName?.trim())  updates.teamName  = body.teamName.trim();
+  const updates: Record<string, string | boolean> = {};
+  if (body.logoUrl)               updates.logoUrl    = body.logoUrl;
+  if (body.firstName?.trim())     updates.firstName  = body.firstName.trim();
+  if (body.lastName?.trim())      updates.lastName   = body.lastName.trim();
+  if (body.teamName?.trim())      updates.teamName   = body.teamName.trim();
+  if (body.hideScores !== undefined) updates.hideScores = body.hideScores;
 
   if (!Object.keys(updates).length) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

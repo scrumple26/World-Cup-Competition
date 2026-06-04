@@ -195,6 +195,19 @@ export function TeamProfileClient({ uid }: { uid: string }) {
         </div>
       </div>
 
+      {isSelf && (
+        <section className="card p-4">
+          <h2 className="mb-3 font-semibold">Preferences</h2>
+          <label className="flex cursor-pointer items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">Hide scores in Schedule</div>
+              <div className="text-xs text-[var(--muted)]">Shows LIVE/FT without the actual score</div>
+            </div>
+            <HideScoresToggle current={p.hideScores ?? false} onToggle={refreshProfile} />
+          </label>
+        </section>
+      )}
+
       <section className="card p-4">
         <h2 className="mb-3 font-semibold">
           Match picks{" "}
@@ -295,5 +308,55 @@ function Stat({ label, value }: { label: string; value: string | number }) {
       <div className="text-xl font-bold">{value}</div>
       <div className="text-xs uppercase text-[var(--muted)]">{label}</div>
     </div>
+  );
+}
+
+function HideScoresToggle({
+  current,
+  onToggle,
+}: {
+  current: boolean;
+  onToggle: () => Promise<void>;
+}) {
+  const [value, setValue] = useState(current);
+  const [busy, setBusy] = useState(false);
+
+  async function toggle() {
+    setBusy(true);
+    const next = !value;
+    setValue(next);
+    try {
+      const { getClientAuth } = await import("@/lib/firebase/client");
+      const auth = getClientAuth();
+      const token = await auth?.currentUser?.getIdToken();
+      if (!token) return;
+      await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ hideScores: next }),
+      });
+      await onToggle();
+    } catch {
+      setValue(!next); // revert on error
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={busy}
+      className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors ${
+        value ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+      } disabled:opacity-60`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+          value ? "translate-x-5" : "translate-x-0.5"
+        }`}
+      />
+    </button>
   );
 }

@@ -157,6 +157,13 @@ export async function getStandings(): Promise<ApiStandingRow[][]> {
   return resp[0]?.league.standings ?? [];
 }
 
+/** Fetch live/current data for specific fixture IDs (short 30s cache). */
+export function getLiveFixtures(fixtureIds: number[]): Promise<ApiFixture[]> {
+  if (fixtureIds.length === 0) return Promise.resolve([]);
+  const ids = fixtureIds.slice(0, 20).join("-"); // API-Football dash-separated
+  return apiGet<ApiFixture[]>("fixtures", { ids }, 30_000);
+}
+
 /** API-Football predictions + comparison stats for a single fixture. */
 export function getMatchInsights(fixtureId: number): Promise<unknown> {
   return apiGet<unknown>("predictions", { fixture: fixtureId }, 30 * 60_000);
