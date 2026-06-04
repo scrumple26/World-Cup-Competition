@@ -211,7 +211,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { signInWithEmailAndPassword } = await import("firebase/auth");
     const auth = getClientAuth();
     if (!auth) throw new Error("Firebase not configured.");
-    await signInWithEmailAndPassword(auth, normEmail, password);
+    const cred = await signInWithEmailAndPassword(auth, normEmail, password);
+    // Explicitly resolve profile rather than waiting on onAuthStateChanged.
+    const profile = await loadFirebaseProfile(cred.user.uid);
+    if (profile) {
+      setUser(profile);
+      setNeedsProfile(false);
+    } else {
+      setNeedsProfile(true);
+    }
   }
 
   async function logOut() {
