@@ -30,12 +30,12 @@ interface AuthState {
   loading: boolean;
   /** True when Firebase Auth has a user but no Firestore profile doc exists yet. */
   needsProfile: boolean;
-  signUp: (email: string, password: string, teamName: string, firstName: string, lastName: string, logoDataUrl?: string | null) => Promise<void>;
+  signUp: (email: string, password: string, teamName: string, firstName: string, lastName: string, logoFile?: File | null) => Promise<void>;
   logIn: (email: string, password: string) => Promise<void>;
   logOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   /** Creates the missing Firestore profile for an already-authenticated Firebase user. */
-  completeProfile: (firstName: string, lastName: string, teamName: string, logoDataUrl?: string | null) => Promise<void>;
+  completeProfile: (firstName: string, lastName: string, teamName: string, logoFile?: File | null) => Promise<void>;
   mockMode: boolean;
 }
 
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, []);
 
-  async function signUp(email: string, password: string, teamName: string, firstName: string, lastName: string, logoDataUrl?: string | null) {
+  async function signUp(email: string, password: string, teamName: string, firstName: string, lastName: string, logoFile?: File | null) {
     const normEmail = email.trim().toLowerCase();
     const isAdmin = normEmail === ADMIN_EMAIL;
 
@@ -144,17 +144,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth) throw new Error("Firebase not configured.");
     const cred = await createUserWithEmailAndPassword(auth, normEmail, password);
     const idToken = await cred.user.getIdToken();
-    const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName, logoDataUrl ?? undefined);
+
+    let logoUrl: string | undefined;
+    if (logoFile) {
+      try {
+        const form = new FormData();
+        form.append("image", logoFile);
+        const res = await fetch("/api/upload-logo", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+          body: form,
+        });
+        if (res.ok) logoUrl = (await res.json()).url;
+      } catch { /* proceed without logo */ }
+    }
+
+    const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName, logoUrl);
     setUser(profile);
   }
 
-  async function completeProfile(firstName: string, lastName: string, teamName: string, logoDataUrl?: string | null) {
+  async function completeProfile(firstName: string, lastName: string, teamName: string, logoFile?: File | null) {
     const { getClientAuth } = await import("../firebase/client");
     const auth = getClientAuth();
     const fbUser = auth?.currentUser;
     if (!fbUser) throw new Error("Not signed in.");
     const idToken = await fbUser.getIdToken();
-    const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName, logoDataUrl ?? undefined);
+
+    let logoUrl: string | undefined;
+    if (logoFile) {
+      try {
+        const form = new FormData();
+        form.append("image", logoFile);
+        const res = await fetch("/api/upload-logo", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+          body: form,
+        });
+        if (res.ok) logoUrl = (await res.json()).url;
+      } catch { /* proceed without logo */ }
+    }
+
+    const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName, logoUrl);
     setUser(profile);
     setNeedsProfile(false);
   }

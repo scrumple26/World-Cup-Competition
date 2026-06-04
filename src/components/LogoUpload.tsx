@@ -4,30 +4,36 @@ import { useRef, useState } from "react";
 
 interface Props {
   currentUrl?: string;
-  /** Called with a compressed base64 data URL after the user picks a file. */
-  onDataUrl: (dataUrl: string) => void;
+  /** Called with a compressed File ready to upload. */
+  onFilePicked: (file: File) => void;
   size?: number;
   showLabel?: boolean;
   uploading?: boolean;
 }
 
-/** Compress + center-crop an image to maxPx × maxPx JPEG and return a data URL. */
-async function compressToDataUrl(file: File, maxPx = 128): Promise<string> {
+/** Center-crop + resize to maxPx × maxPx JPEG and return a File. */
+async function compressImage(src: File, maxPx = 300): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const blobUrl = URL.createObjectURL(file);
+    const blobUrl = URL.createObjectURL(src);
     img.onload = () => {
       URL.revokeObjectURL(blobUrl);
       const canvas = document.createElement("canvas");
       canvas.width = maxPx;
       canvas.height = maxPx;
       const ctx = canvas.getContext("2d")!;
-      // Center-crop to square then scale to maxPx
       const side = Math.min(img.width, img.height);
       const sx = (img.width - side) / 2;
       const sy = (img.height - side) / 2;
       ctx.drawImage(img, sx, sy, side, side, 0, 0, maxPx, maxPx);
-      resolve(canvas.toDataURL("image/jpeg", 0.82));
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { reject(new Error("Canvas toBlob failed")); return; }
+          resolve(new File([blob], "logo.jpg", { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.85,
+      );
     };
     img.onerror = reject;
     img.src = blobUrl;
@@ -36,7 +42,7 @@ async function compressToDataUrl(file: File, maxPx = 128): Promise<string> {
 
 export function LogoUpload({
   currentUrl,
-  onDataUrl,
+  onFilePicked,
   size = 64,
   showLabel = true,
   uploading = false,
@@ -51,9 +57,9 @@ export function LogoUpload({
     e.target.value = "";
     setCompressing(true);
     try {
-      const dataUrl = await compressToDataUrl(file);
-      setPreview(dataUrl);
-      onDataUrl(dataUrl);
+      const compressed = await compressImage(file);
+      setPreview(URL.createObjectURL(compressed));
+      onFilePicked(compressed);
     } finally {
       setCompressing(false);
     }
