@@ -9,23 +9,23 @@
 import type { FriendGroup, ScoreDoc, UserProfile } from "../types";
 import { ADMIN_EMAIL } from "../config";
 
-const NAMES: { teamName: string; first: string }[] = [
-  { teamName: "Galaxy Strikers", first: "nolan" },
-  { teamName: "Thunder Boots", first: "marcus" },
-  { teamName: "Net Rippers", first: "sofia" },
-  { teamName: "Offside Kings", first: "liam" },
-  { teamName: "Golden Goals", first: "emma" },
-  { teamName: "Tiki Taka Tacos", first: "diego" },
-  { teamName: "The Hand of Pod", first: "grace" },
-  { teamName: "Counter Attackers", first: "noah" },
-  { teamName: "Pitch Perfect", first: "ava" },
-  { teamName: "Last Minute Heroes", first: "ethan" },
-  { teamName: "Group of Death", first: "mia" },
-  { teamName: "Extra Time Crew", first: "lucas" },
-  { teamName: "Penalty Box Pros", first: "olivia" },
-  { teamName: "Stoppage Time", first: "james" },
-  { teamName: "Total Football", first: "isabella" },
-  { teamName: "VAR Wars", first: "benjamin" },
+const NAMES: { teamName: string; first: string; last: string }[] = [
+  { teamName: "Galaxy Strikers",    first: "Nolan",    last: "Leyse" },
+  { teamName: "Thunder Boots",      first: "Marcus",   last: "Tanner" },
+  { teamName: "Net Rippers",        first: "Sofia",    last: "Reyes" },
+  { teamName: "Offside Kings",      first: "Liam",     last: "Park" },
+  { teamName: "Golden Goals",       first: "Emma",     last: "Howell" },
+  { teamName: "Tiki Taka Tacos",    first: "Diego",    last: "Vargas" },
+  { teamName: "The Hand of Pod",    first: "Grace",    last: "Nguyen" },
+  { teamName: "Counter Attackers",  first: "Noah",     last: "Briggs" },
+  { teamName: "Pitch Perfect",      first: "Ava",      last: "Marsh" },
+  { teamName: "Last Minute Heroes", first: "Ethan",    last: "Cole" },
+  { teamName: "Group of Death",     first: "Mia",      last: "Santos" },
+  { teamName: "Extra Time Crew",    first: "Lucas",    last: "Ford" },
+  { teamName: "Penalty Box Pros",   first: "Olivia",   last: "Burns" },
+  { teamName: "Stoppage Time",      first: "James",    last: "Quinn" },
+  { teamName: "Total Football",     first: "Isabella", last: "Stone" },
+  { teamName: "VAR Wars",           first: "Benjamin", last: "Hart" },
 ];
 
 const GROUPS: FriendGroup[] = ["A", "B", "C", "D"];
@@ -37,6 +37,8 @@ export const SEED_USERS: UserProfile[] = NAMES.map((n, i) => {
   return {
     uid: `seed-${i + 1}`,
     email,
+    firstName: n.first,
+    lastName: n.last,
     teamName: n.teamName,
     friendGroup: GROUPS[i % 4],
     isAdmin,

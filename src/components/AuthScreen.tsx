@@ -8,6 +8,8 @@ export function AuthScreen() {
   const [mode, setMode] = useState<"signup" | "login">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [teamName, setTeamName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -17,7 +19,7 @@ export function AuthScreen() {
     setError(null);
     setBusy(true);
     try {
-      if (mode === "signup") await signUp(email, password, teamName);
+      if (mode === "signup") await signUp(email, password, teamName, firstName, lastName);
       else await logIn(email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -56,16 +58,40 @@ export function AuthScreen() {
 
           <form onSubmit={submit} className="space-y-4">
             {mode === "signup" && (
-              <div>
-                <label className="label">Team name</label>
-                <input
-                  className="input"
-                  placeholder="e.g. Galaxy Strikers"
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
-                  required
-                />
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">First name</label>
+                    <input
+                      className="input"
+                      placeholder="Nolan"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Last name</label>
+                    <input
+                      className="input"
+                      placeholder="Smith"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Team name</label>
+                  <input
+                    className="input"
+                    placeholder="e.g. Galaxy Strikers"
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                    required
+                  />
+                </div>
+              </>
             )}
             <div>
               <label className="label">Email</label>

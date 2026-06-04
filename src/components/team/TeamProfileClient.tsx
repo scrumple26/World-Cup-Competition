@@ -18,6 +18,7 @@ import type {
   ThirdPlacePrediction,
   UserProfile,
 } from "@/lib/types";
+import { displayName } from "@/lib/types";
 import { TeamBadge } from "../TeamBadge";
 
 export function TeamProfileClient({ uid }: { uid: string }) {
@@ -62,7 +63,7 @@ export function TeamProfileClient({ uid }: { uid: string }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{profile.teamName}</h1>
+              <h1 className="text-2xl font-bold">{displayName(profile)}</h1>
               {isSelf && (
                 <span className="chip bg-[var(--accent)]/15 text-[var(--accent)]">You</span>
               )}
@@ -70,7 +71,7 @@ export function TeamProfileClient({ uid }: { uid: string }) {
                 <span className="chip bg-[var(--gold)]/15 text-[var(--gold)]">Admin</span>
               )}
             </div>
-            <p className="text-sm text-[var(--muted)]">Group {profile.friendGroup}</p>
+            <p className="text-sm text-[var(--muted)]">{profile.teamName} · Group {profile.friendGroup}</p>
           </div>
           <div className="flex gap-5 text-center">
             <Stat label="Rank" value={rank ? `#${rank}` : "—"} />

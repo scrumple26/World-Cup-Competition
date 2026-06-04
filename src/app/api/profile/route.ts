@@ -31,9 +31,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { teamName?: string };
+  const body = (await req.json().catch(() => ({}))) as { teamName?: string; firstName?: string; lastName?: string };
   const teamName = (body.teamName ?? "").trim();
+  const firstName = (body.firstName ?? "").trim();
+  const lastName = (body.lastName ?? "").trim();
   if (!teamName) return NextResponse.json({ error: "teamName required" }, { status: 400 });
+  if (!firstName) return NextResponse.json({ error: "firstName required" }, { status: 400 });
+  if (!lastName) return NextResponse.json({ error: "lastName required" }, { status: 400 });
 
   const ref = db.collection("users").doc(uid);
   const existing = await ref.get();
@@ -47,6 +51,8 @@ export async function POST(req: NextRequest) {
   const profile: UserProfile = {
     uid,
     email,
+    firstName,
+    lastName,
     teamName,
     friendGroup,
     isAdmin: email === ADMIN_EMAIL,

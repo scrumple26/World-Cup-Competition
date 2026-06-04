@@ -28,7 +28,7 @@ import {
 interface AuthState {
   user: UserProfile | null;
   loading: boolean;
-  signUp: (email: string, password: string, teamName: string) => Promise<void>;
+  signUp: (email: string, password: string, teamName: string, firstName: string, lastName: string) => Promise<void>;
   logIn: (email: string, password: string) => Promise<void>;
   logOut: () => Promise<void>;
   mockMode: boolean;
@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, []);
 
-  async function signUp(email: string, password: string, teamName: string) {
+  async function signUp(email: string, password: string, teamName: string, firstName: string, lastName: string) {
     const normEmail = email.trim().toLowerCase();
     const isAdmin = normEmail === ADMIN_EMAIL;
 
@@ -96,6 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile: UserProfile = {
         uid: `local-${Date.now()}`,
         email: normEmail,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         teamName: teamName.trim(),
         friendGroup,
         isAdmin,
@@ -115,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cred = await createUserWithEmailAndPassword(auth, normEmail, password);
     // Server creates the profile (balanced group assignment + admin flag).
     const idToken = await cred.user.getIdToken();
-    const profile = await createFirebaseProfile(idToken, teamName);
+    const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName);
     setUser(profile);
   }
 
@@ -173,15 +175,16 @@ async function loadFirebaseProfile(uid: string): Promise<UserProfile | null> {
 async function createFirebaseProfile(
   idToken: string,
   teamName: string,
+  firstName: string,
+  lastName: string,
 ): Promise<UserProfile> {
-  // Delegates to a server route that assigns the group + admin flag securely.
   const res = await fetch("/api/profile", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${idToken}`,
     },
-    body: JSON.stringify({ teamName }),
+    body: JSON.stringify({ teamName, firstName: firstName.trim(), lastName: lastName.trim() }),
   });
   if (!res.ok) throw new Error("Failed to create profile");
   return (await res.json()) as UserProfile;

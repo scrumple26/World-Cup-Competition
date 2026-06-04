@@ -8,10 +8,18 @@ export type { FriendGroup };
 export interface UserProfile {
   uid: string;
   email: string;
+  firstName: string;
+  lastName: string;
   teamName: string;
   friendGroup: FriendGroup;
   isAdmin: boolean;
   createdAt: number;
+}
+
+/** Returns "First L." display format, e.g. "Nolan L." */
+export function displayName(profile: Pick<UserProfile, "firstName" | "lastName">): string {
+  const last = profile.lastName.trim();
+  return `${profile.firstName.trim()} ${last.charAt(0).toUpperCase()}.`;
 }
 
 /** Match outcome from the home team's perspective. */
