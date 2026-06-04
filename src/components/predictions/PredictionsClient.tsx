@@ -7,8 +7,10 @@ import { usePredictions } from "@/lib/usePredictions";
 import { GroupSection } from "./GroupSection";
 import { ThirdPlaceSelector } from "./ThirdPlaceSelector";
 import { FlashcardMode } from "./FlashcardMode";
+import { KnockoutPredictions } from "./KnockoutPredictions";
 
 type Mode = "group" | "flash";
+type Stage = "group" | "knockout";
 
 export function PredictionsClient() {
   const { user } = useAuth();
@@ -26,6 +28,7 @@ export function PredictionsClient() {
   } = usePredictions(user?.uid, groups);
 
   const [mode, setMode] = useState<Mode>("group");
+  const [stage, setStage] = useState<Stage>("group");
 
   if (loading || !loaded) {
     return <p className="text-[var(--muted)]">Loading World Cup fixtures…</p>;
@@ -43,6 +46,33 @@ export function PredictionsClient() {
 
   return (
     <div className="space-y-5">
+      <div className="flex rounded-lg border border-[var(--border)] p-1 sm:w-fit">
+        {(
+          [
+            ["group", "Group stage"],
+            ["knockout", "Knockout"],
+          ] as const
+        ).map(([s, label]) => (
+          <button
+            key={s}
+            onClick={() => setStage(s)}
+            className={`flex-1 rounded-md px-4 py-1.5 text-sm font-semibold transition sm:flex-none ${
+              stage === s ? "bg-[var(--accent-2)] text-[#06210f]" : "text-[var(--muted)]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {stage === "knockout" ? (
+        <KnockoutPredictions
+          matches={matches}
+          saveStates={saveStates}
+          onMatchChange={setMatch}
+        />
+      ) : (
+        <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Group Stage Predictions</h1>
@@ -99,6 +129,8 @@ export function PredictionsClient() {
             onToggle={toggleThird}
           />
         </div>
+      )}
+        </>
       )}
     </div>
   );
