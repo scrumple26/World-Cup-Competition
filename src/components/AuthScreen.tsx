@@ -15,6 +15,28 @@ export function AuthScreen() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+
+  async function sendReset(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      if (mockMode) throw new Error("Password reset isn't available in demo mode.");
+      const { getClientAuth } = await import("@/lib/firebase/client");
+      const { sendPasswordResetEmail } = await import("firebase/auth");
+      const auth = getClientAuth();
+      if (!auth) throw new Error("Firebase not configured.");
+      await sendPasswordResetEmail(auth, resetEmail.trim().toLowerCase());
+      setResetSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +68,7 @@ export function AuthScreen() {
             {(["signup", "login"] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => setMode(m)}
+                onClick={() => { setMode(m); setShowReset(false); setResetSent(false); setError(null); }}
                 className={`flex-1 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
                   mode === m
                     ? "bg-[var(--accent)] text-[#06210f]"
@@ -58,7 +80,46 @@ export function AuthScreen() {
             ))}
           </div>
 
-          <form onSubmit={submit} className="space-y-4">
+          {/* ---- Forgot password panel ---- */}
+          {showReset && (
+            <div className="space-y-3">
+              {resetSent ? (
+                <p className="rounded-lg bg-green-500/10 px-3 py-3 text-sm text-green-300">
+                  Check your email for a password reset link.
+                </p>
+              ) : (
+                <form onSubmit={sendReset} className="space-y-3">
+                  <p className="text-sm text-[var(--muted)]">
+                    Enter your email and we&apos;ll send you a reset link.
+                  </p>
+                  <input
+                    className="input"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    required
+                  />
+                  {error && (
+                    <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
+                  )}
+                  <button type="submit" className="btn-primary w-full" disabled={busy}>
+                    {busy ? "Sending…" : "Send reset email"}
+                  </button>
+                </form>
+              )}
+              <button
+                type="button"
+                onClick={() => { setShowReset(false); setResetSent(false); setError(null); }}
+                className="w-full text-center text-xs text-[var(--muted)] hover:text-[var(--fg)]"
+              >
+                ← Back to sign in
+              </button>
+            </div>
+          )}
+
+          {/* ---- Normal sign-in / sign-up form ---- */}
+          {!showReset && <form onSubmit={submit} className="space-y-4">
             {mode === "signup" && (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -108,7 +169,18 @@ export function AuthScreen() {
               />
             </div>
             <div>
-              <label className="label">Password</label>
+              <div className="flex items-center justify-between">
+                <label className="label">Password</label>
+                {mode === "login" && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowReset(true); setResetEmail(email); setError(null); }}
+                    className="text-xs text-[var(--muted)] hover:text-[var(--fg)]"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <input
                 className="input"
                 type="password"
@@ -132,9 +204,9 @@ export function AuthScreen() {
                   ? "Create account & join"
                   : "Sign in"}
             </button>
-          </form>
+          </form>}
 
-          {mode === "signup" && (
+          {mode === "signup" && !showReset && (
             <p className="mt-3 text-center text-xs text-[var(--muted)]">
               You&apos;ll be randomly assigned to one of 4 groups.
             </p>
