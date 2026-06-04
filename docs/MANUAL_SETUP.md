@@ -25,6 +25,14 @@ creation, secret values). Everything else is built and tested without it. Work t
 - [ ] I'll run the deploy; then add all `.env.local` values as Vercel **Environment Variables**
       (Production + Preview) — including `CRON_SECRET`.
 - [ ] Confirm the Vercel Cron entry (in `vercel.json`) is active.
+      ⚠️ Vercel **Hobby** plan runs crons at most **once/day**. For the every-3-hours
+      schedule during the tournament you need Vercel **Pro**, OR use a free external
+      cron (e.g. cron-job.org) hitting `https://<your-app>/api/sync?key=<CRON_SECRET>`,
+      OR press "Sync now" in the Admin tab.
+
+## Deploy Firestore security rules
+- [ ] With the Firebase CLI: `npx firebase deploy --only firestore:rules`
+      (or paste `firestore.rules` into Firebase console → Firestore → Rules → Publish).
 
 ## 4. Security
 - [ ] (Recommended) Rotate the API-Football key in your API-Football dashboard, since it was
