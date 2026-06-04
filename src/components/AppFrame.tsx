@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { NavBar } from "./NavBar";
 import { AuthScreen } from "./AuthScreen";
+import { CompleteProfileScreen } from "./CompleteProfileScreen";
 
 export function AppFrame({ children }: { children: ReactNode }) {
-  const { user, loading, mockMode } = useAuth();
+  const { user, loading, needsProfile, mockMode } = useAuth();
 
   if (loading) {
     return (
@@ -16,6 +17,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
     );
   }
 
+  if (needsProfile) return <CompleteProfileScreen />;
   if (!user) return <AuthScreen />;
 
   return (

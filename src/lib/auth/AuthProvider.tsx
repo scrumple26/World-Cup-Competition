@@ -28,10 +28,14 @@ import {
 interface AuthState {
   user: UserProfile | null;
   loading: boolean;
+  /** True when Firebase Auth has a user but no Firestore profile doc exists yet. */
+  needsProfile: boolean;
   signUp: (email: string, password: string, teamName: string, firstName: string, lastName: string, logoFile?: File | null) => Promise<void>;
   logIn: (email: string, password: string) => Promise<void>;
   logOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /** Creates the missing Firestore profile for an already-authenticated Firebase user. */
+  completeProfile: (firstName: string, lastName: string, teamName: string, logoFile?: File | null) => Promise<void>;
   mockMode: boolean;
 }
 
@@ -46,6 +50,7 @@ export function useAuth(): AuthState {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsProfile, setNeedsProfile] = useState(false);
 
   // ---- mock mode bootstrap ----
   useEffect(() => {
@@ -75,12 +80,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             if (!fbUser) {
               setUser(null);
+              setNeedsProfile(false);
               return;
             }
             const profile = await loadFirebaseProfile(fbUser.uid);
-            setUser(profile);
+            if (profile) {
+              setUser(profile);
+              setNeedsProfile(false);
+            } else {
+              // Auth user exists but no Firestore profile — prompt for setup.
+              setUser(null);
+              setNeedsProfile(true);
+            }
           } catch {
             setUser(null);
+            setNeedsProfile(false);
           } finally {
             setLoading(false);
           }
@@ -148,6 +162,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(profile);
   }
 
+  async function completeProfile(firstName: string, lastName: string, teamName: string, logoFile?: File | null) {
+    const { getClientAuth } = await import("../firebase/client");
+    const auth = getClientAuth();
+    const fbUser = auth?.currentUser;
+    if (!fbUser) throw new Error("Not signed in.");
+    const idToken = await fbUser.getIdToken();
+
+    let logoUrl: string | undefined;
+    if (logoFile) {
+      try {
+        const form = new FormData();
+        form.append("image", logoFile);
+        const res = await fetch("/api/upload-logo", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+          body: form,
+        });
+        if (res.ok) logoUrl = (await res.json()).url;
+      } catch {
+        // proceed without logo
+      }
+    }
+
+    const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName, logoUrl);
+    setUser(profile);
+    setNeedsProfile(false);
+  }
+
   async function refreshProfile() {
     if (USE_MOCK || !user) return;
     const profile = await loadFirebaseProfile(user.uid);
@@ -187,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ user, loading, signUp, logIn, logOut, refreshProfile, mockMode: USE_MOCK }}
+      value={{ user, loading, needsProfile, signUp, logIn, logOut, refreshProfile, completeProfile, mockMode: USE_MOCK }}
     >
       {children}
     </Ctx.Provider>
