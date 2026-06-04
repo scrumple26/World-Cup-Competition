@@ -12,8 +12,13 @@ export interface WcGroupStanding {
     teamName: string;
     logo: string;
     played: number;
-    points: number;
+    win: number;
+    draw: number;
+    lose: number;
+    gf: number;
+    ga: number;
     goalsDiff: number;
+    points: number;
   }[];
 }
 
@@ -45,8 +50,13 @@ export function toGroupStandings(groups: ApiStandingRow[][]): WcGroupStanding[] 
         teamName: r.team.name,
         logo: r.team.logo,
         played: r.all.played,
-        points: r.points,
+        win: r.all.win,
+        draw: r.all.draw,
+        lose: r.all.lose,
+        gf: r.all.goals.for,
+        ga: r.all.goals.against,
         goalsDiff: r.goalsDiff,
+        points: r.points,
       })),
     }))
     // Keep only real lettered groups (API sometimes returns extra ranking tables).

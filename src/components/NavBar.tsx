@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 const TABS = [
   { href: "/predictions", label: "Predictions" },
   { href: "/schedule", label: "Schedule" },
+  { href: "/worldcup", label: "World Cup" },
   { href: "/groups", label: "Groups" },
   { href: "/bracket", label: "Bracket" },
   { href: "/leaderboard", label: "Leaderboard" },

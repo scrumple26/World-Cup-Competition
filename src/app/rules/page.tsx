@@ -20,7 +20,45 @@ export default function RulesPage() {
     <div className="space-y-5">
       <h1 className="text-2xl font-bold">Rules &amp; Scoring</h1>
 
-      <Section title="How the competition works">
+      {/* ---- WC format first ---- */}
+      <Section title="How World Cup 2026 works">
+        <p>
+          The 2026 World Cup has <b>48 teams</b> in <b>12 groups (A–L)</b> of 4. Each
+          team plays 3 group-stage matches.
+        </p>
+        <ul className="ml-5 list-disc space-y-1">
+          <li>The <b>top 2 teams in each group</b> advance automatically (24 teams).</li>
+          <li>
+            The <b>8 best 3rd-place teams</b> also advance, filling out the 32-team knockout.
+          </li>
+          <li>
+            Knockout rounds: <b>Round of 32 → Round of 16 → Quarter-finals →
+            Semi-finals → Final</b> (single elimination; extra time then penalties
+            if tied at 90 min).
+          </li>
+        </ul>
+        <p className="font-semibold mt-1">How the 8 best 3rd-place teams are picked:</p>
+        <p>
+          All 12 third-place teams are ranked against each other using the same
+          criteria as group-stage tiebreakers, in this order:
+        </p>
+        <ol className="ml-5 list-decimal space-y-0.5">
+          <li>Most <b>points</b></li>
+          <li>Best <b>goal difference</b></li>
+          <li>Most <b>goals scored</b></li>
+          <li>Most <b>wins</b></li>
+          <li>Fewest <b>disciplinary points</b> (yellow = 1, red = 3, yellow+red = 4)</li>
+          <li><b>Drawing of lots</b> if still tied</li>
+        </ol>
+        <p className="text-[var(--muted)]">
+          The 8 teams with the best records among all 12 third-place finishers advance.
+          This is why predicting which 3rd-place teams advance is one of the harder
+          picks — it depends on results across all 12 groups.
+        </p>
+      </Section>
+
+      {/* ---- Competition format ---- */}
+      <Section title="How our competition works">
         <p>
           16 friends compete in a season that mirrors the real World Cup. You&apos;re
           split into <b>4 groups of 4</b> for a group stage, then the top scorers
@@ -32,8 +70,7 @@ export default function RulesPage() {
           <li>Knockout seeds 1–8 are set by group-stage points; matchups are 1v8, 2v7, 3v6, 4v5.</li>
           <li>
             In each knockout round you go head-to-head: whoever scores more points on
-            that round&apos;s WC matches advances. Ties break on total points (group +
-            knockout).
+            that round&apos;s WC matches advances. Ties break on total points.
           </li>
           <li>Everyone may keep making predictions every round, even after elimination.</li>
         </ul>
@@ -71,27 +108,6 @@ export default function RulesPage() {
           <li><b>Your Semifinals</b> → all WC Round of 16 matches</li>
           <li><b>Your Final</b> → WC Quarter-finals, Semi-finals &amp; the Final</li>
         </ul>
-      </Section>
-
-      <Section title="How the World Cup 2026 works">
-        <p>
-          The 2026 World Cup has <b>48 teams</b> in <b>12 groups (A–L)</b> of 4. Each
-          team plays 3 group matches.
-        </p>
-        <ul className="ml-5 list-disc space-y-1">
-          <li>The top 2 of each group advance (24 teams)…</li>
-          <li>…plus the <b>8 best 3rd-place teams</b> — making 32 for the knockout.</li>
-          <li>
-            Knockout rounds: <b>Round of 32 → Round of 16 → Quarter-finals →
-            Semi-finals → Final</b> (single elimination; extra time then penalties
-            decide level matches).
-          </li>
-        </ul>
-        <p className="text-[var(--muted)]">
-          Live fixtures, results and stats come from API-Football. When you predict a
-          match you can open “Insights &amp; stats” for win probabilities and team
-          comparisons.
-        </p>
       </Section>
     </div>
   );

@@ -83,12 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setNeedsProfile(false);
               return;
             }
-            const profile = await loadFirebaseProfile(fbUser.uid);
+            // Use server API (Admin SDK) — avoids Firestore client auth timing on reload.
+            const idToken = await fbUser.getIdToken();
+            const res = await fetch("/api/profile", {
+              headers: { Authorization: `Bearer ${idToken}` },
+            });
+            const profile = res.ok ? (await res.json() as UserProfile | null) : null;
             if (profile) {
               setUser(profile);
               setNeedsProfile(false);
             } else {
-              // Auth user exists but no Firestore profile — prompt for setup.
               setUser(null);
               setNeedsProfile(true);
             }
@@ -268,15 +272,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 // ---- Firebase profile helpers (used only in Firebase mode) ----
-
-async function loadFirebaseProfile(uid: string): Promise<UserProfile | null> {
-  const { getClientDb } = await import("../firebase/client");
-  const { doc, getDoc } = await import("firebase/firestore");
-  const db = getClientDb();
-  if (!db) return null;
-  const snap = await getDoc(doc(db, "users", uid));
-  return snap.exists() ? (snap.data() as UserProfile) : null;
-}
 
 async function createFirebaseProfile(
   idToken: string,
