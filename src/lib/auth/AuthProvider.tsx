@@ -212,8 +212,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getClientAuth();
     if (!auth) throw new Error("Firebase not configured.");
     const cred = await signInWithEmailAndPassword(auth, normEmail, password);
-    // Explicitly resolve profile rather than waiting on onAuthStateChanged.
-    const profile = await loadFirebaseProfile(cred.user.uid);
+    // Load profile via server API — avoids Firestore client auth timing issues.
+    const idToken = await cred.user.getIdToken();
+    const res = await fetch("/api/profile", {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    const profile = res.ok ? (await res.json() as UserProfile | null) : null;
     if (profile) {
       setUser(profile);
       setNeedsProfile(false);

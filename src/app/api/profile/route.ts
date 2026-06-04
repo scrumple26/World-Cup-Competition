@@ -7,6 +7,33 @@ import type { FriendGroup, UserProfile } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 /**
+ * GET /api/profile   (Authorization: Bearer <Firebase ID token>)
+ * Returns the caller's profile document, or null if not created yet.
+ */
+export async function GET(req: NextRequest) {
+  const auth = getAdminAuth();
+  const db = getAdminDb();
+  if (!auth || !db) {
+    return NextResponse.json({ error: "Server not configured" }, { status: 503 });
+  }
+
+  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!token) return NextResponse.json({ error: "Missing token" }, { status: 401 });
+
+  let uid: string;
+  try {
+    const decoded = await auth.verifyIdToken(token);
+    uid = decoded.uid;
+  } catch {
+    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+  }
+
+  const ref = db.collection("users").doc(uid);
+  const snap = await ref.get();
+  return NextResponse.json(snap.exists ? snap.data() : null);
+}
+
+/**
  * POST /api/profile  { teamName }   (Authorization: Bearer <Firebase ID token>)
  * Creates the caller's profile with a balanced random group assignment and the
  * admin flag. Idempotent: returns the existing profile if already created.
