@@ -3,82 +3,91 @@
 import { useRef, useState } from "react";
 
 interface Props {
-  /** Currently saved logo URL (from Firestore). */
   currentUrl?: string;
-  /** Called with the selected File. Parent is responsible for uploading. */
-  onFilePicked: (file: File) => void;
-  /** Size of the circle in px (default 64). */
+  /** Called with a compressed base64 data URL after the user picks a file. */
+  onDataUrl: (dataUrl: string) => void;
   size?: number;
-  /** Whether to show the helper text beside the circle (default true). */
   showLabel?: boolean;
-  /** Uploading spinner state controlled by parent. */
   uploading?: boolean;
+}
+
+/** Compress + center-crop an image to maxPx × maxPx JPEG and return a data URL. */
+async function compressToDataUrl(file: File, maxPx = 128): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const blobUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
+      const canvas = document.createElement("canvas");
+      canvas.width = maxPx;
+      canvas.height = maxPx;
+      const ctx = canvas.getContext("2d")!;
+      // Center-crop to square then scale to maxPx
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2;
+      const sy = (img.height - side) / 2;
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, maxPx, maxPx);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = reject;
+    img.src = blobUrl;
+  });
 }
 
 export function LogoUpload({
   currentUrl,
-  onFilePicked,
+  onDataUrl,
   size = 64,
   showLabel = true,
   uploading = false,
 }: Props) {
   const [preview, setPreview] = useState<string | null>(currentUrl ?? null);
+  const [compressing, setCompressing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPreview(URL.createObjectURL(file));
-    onFilePicked(file);
-    // Reset so picking the same file again still fires onChange
     e.target.value = "";
+    setCompressing(true);
+    try {
+      const dataUrl = await compressToDataUrl(file);
+      setPreview(dataUrl);
+      onDataUrl(dataUrl);
+    } finally {
+      setCompressing(false);
+    }
   }
+
+  const busy = uploading || compressing;
 
   return (
     <div className="flex items-center gap-3">
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        disabled={uploading}
+        disabled={busy}
         className="relative flex-shrink-0 overflow-hidden rounded-full border-2 border-dashed border-[var(--border)] transition hover:border-[var(--accent)] disabled:opacity-60"
         style={{ width: size, height: size }}
         title="Upload team logo"
       >
-        {uploading ? (
-          <span className="flex h-full w-full items-center justify-center text-xs text-[var(--muted)]">
-            ⏳
-          </span>
+        {busy ? (
+          <span className="flex h-full w-full items-center justify-center text-xs text-[var(--muted)]">⏳</span>
         ) : preview ? (
-          <img
-            src={preview}
-            alt="Team logo"
-            className="h-full w-full object-cover"
-          />
+          <img src={preview} alt="Team logo" className="h-full w-full object-cover" />
         ) : (
-          <span className="flex h-full w-full items-center justify-center text-lg text-[var(--muted)]">
-            +
-          </span>
+          <span className="flex h-full w-full items-center justify-center text-lg text-[var(--muted)]">+</span>
         )}
       </button>
 
       {showLabel && (
         <span className="text-xs text-[var(--muted)]">
-          {uploading
-            ? "Uploading…"
-            : preview
-              ? "Click to change logo"
-              : "Add team logo"}{" "}
-          <span className="opacity-60">(optional, max 2 MB)</span>
+          {busy ? "Processing…" : preview ? "Click to change logo" : "Add team logo"}{" "}
+          <span className="opacity-60">(optional)</span>
         </span>
       )}
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handlePick}
-      />
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handlePick} />
     </div>
   );
 }

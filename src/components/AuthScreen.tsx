@@ -12,7 +12,7 @@ export function AuthScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [teamName, setTeamName] = useState("");
-  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showReset, setShowReset] = useState(false);
@@ -43,7 +43,7 @@ export function AuthScreen() {
     setError(null);
     setBusy(true);
     try {
-      if (mode === "signup") await signUp(email, password, teamName, firstName, lastName, logoFile);
+      if (mode === "signup") await signUp(email, password, teamName, firstName, lastName, logoDataUrl);
       else await logIn(email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -154,7 +154,7 @@ export function AuthScreen() {
                     required
                   />
                 </div>
-                <LogoUpload onFilePicked={setLogoFile} size={52} />
+                <LogoUpload onDataUrl={setLogoDataUrl} size={52} />
               </>
             )}
             <div>

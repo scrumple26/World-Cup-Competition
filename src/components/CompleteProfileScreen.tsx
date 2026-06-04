@@ -9,7 +9,7 @@ export function CompleteProfileScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [teamName, setTeamName] = useState("");
-  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -18,7 +18,7 @@ export function CompleteProfileScreen() {
     setError(null);
     setBusy(true);
     try {
-      await completeProfile(firstName, lastName, teamName, logoFile);
+      await completeProfile(firstName, lastName, teamName, logoDataUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -73,7 +73,7 @@ export function CompleteProfileScreen() {
               />
             </div>
 
-            <LogoUpload onFilePicked={setLogoFile} size={52} />
+            <LogoUpload onDataUrl={setLogoDataUrl} size={52} />
 
             {error && (
               <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">

@@ -91,7 +91,7 @@ export function TeamProfileClient({ uid }: { uid: string }) {
     }
   }
 
-  async function handleLogoPick(file: File) {
+  async function handleLogoPick(dataUrl: string) {
     if (!isSelf) return;
     setLogoUploading(true);
     setLogoError(null);
@@ -100,26 +100,13 @@ export function TeamProfileClient({ uid }: { uid: string }) {
       const auth = getClientAuth();
       const token = await auth?.currentUser?.getIdToken();
       if (!token) return;
-
-      const form = new FormData();
-      form.append("image", file);
-      const uploadRes = await fetch("/api/upload-logo", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      });
-      const uploadData = await uploadRes.json() as { url?: string; error?: string };
-      if (!uploadRes.ok) {
-        setLogoError(uploadData.error ?? "Upload failed");
-        return;
-      }
-
-      await fetch("/api/profile", {
+      const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ logoUrl: uploadData.url }),
+        body: JSON.stringify({ logoUrl: dataUrl }),
       });
-      setLogoUrl(uploadData.url);
+      if (!res.ok) { setLogoError("Failed to save logo"); return; }
+      setLogoUrl(dataUrl);
     } catch (err) {
       setLogoError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -141,7 +128,7 @@ export function TeamProfileClient({ uid }: { uid: string }) {
             {isSelf ? (
               <LogoUpload
                 currentUrl={effectiveLogoUrl}
-                onFilePicked={handleLogoPick}
+                onDataUrl={handleLogoPick}
                 uploading={logoUploading}
                 size={72}
                 showLabel={false}
