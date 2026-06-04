@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// World Cup Competition — Firestore security rules.
+// Users read everything (it's a friendly league), but may only write their OWN
+// profile and predictions. All scoring, WC data, config, and bracket docs are
+// written exclusively by the Admin SDK (server/cron), which bypasses these rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Profiles: anyone signed-in can read; you can create/update only your own.
+    // (Group assignment + admin flag are set by the server on creation.)
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    // Predictions: read by anyone signed-in; write only your own subtree.
+    match /predictions/{uid}/{document=**} {
+      allow read: if signedIn();
+      allow write: if isOwner(uid);
+    }
+
+    // Read-only to clients; server (Admin SDK) writes these.
+    match /scores/{uid}      { allow read: if signedIn(); allow write: if false; }
+    match /wcMatches/{id}    { allow read: if signedIn(); allow write: if false; }
+    match /wcStandings/{id}  { allow read: if signedIn(); allow write: if false; }
+    match /wcPredictionsCache/{id} { allow read: if signedIn(); allow write: if false; }
+    match /config/{id}       { allow read: if signedIn(); allow write: if false; }
+    match /bracket/{id}      { allow read: if signedIn(); allow write: if false; }
+  }
+}

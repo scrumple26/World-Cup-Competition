@@ -183,8 +183,8 @@ export function seedKnockout<T extends StandingStats & { friendGroup: string }>(
     groups.set(r.friendGroup, arr);
   }
   const qualifiers: T[] = [];
-  for (const arr of groups.values()) {
-    qualifiers.push(...rankStandings(arr).slice(0, 2));
+  for (const arr of Array.from(groups.values())) {
+    qualifiers.push(...rankStandings<T>(arr).slice(0, 2));
   }
   return rankStandings(qualifiers);
 }

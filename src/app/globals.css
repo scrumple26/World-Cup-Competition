@@ -3,21 +3,46 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0b1220;
+  --bg-elev: #131c2e;
+  --bg-card: #182338;
+  --border: #243049;
+  --fg: #e8eefb;
+  --muted: #93a1bd;
+  --accent: #22c55e;
+  --accent-2: #38bdf8;
+  --gold: #f5c451;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), system-ui, Arial, sans-serif;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border bg-[var(--bg-card)] border-[var(--border)];
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-[var(--accent)] text-[#06210f] hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply btn border border-[var(--border)] text-[var(--fg)] hover:bg-[var(--bg-elev)];
+  }
+  .input {
+    @apply w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--accent-2)];
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium uppercase tracking-wide text-[var(--muted)];
+  }
+  .chip {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
 }
 
 @layer utilities {

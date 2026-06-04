@@ -5,7 +5,6 @@ import {
   scoreGroupFinish,
   scoreThirdPlace,
   hashUid,
-  compareStanding,
   rankStandings,
   seedKnockout,
   knockoutMatchups,
