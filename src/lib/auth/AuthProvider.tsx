@@ -208,11 +208,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     const { getClientAuth } = await import("../firebase/client");
-    const { signInWithEmailAndPassword } = await import("firebase/auth");
+    const { signInWithEmailAndPassword, onAuthStateChanged } = await import("firebase/auth");
     const auth = getClientAuth();
     if (!auth) throw new Error("Firebase not configured.");
     const cred = await signInWithEmailAndPassword(auth, normEmail, password);
-    // Load profile via server API — avoids Firestore client auth timing issues.
+
+    // Firebase notifies Firestore's internal auth listener BEFORE calling external
+    // onAuthStateChanged observers. Waiting here ensures Firestore has the token
+    // by the time the app renders and data hooks start reading.
+    await new Promise<void>((resolve) => {
+      const unsub = onAuthStateChanged(auth, (fbUser) => {
+        if (fbUser?.uid === cred.user.uid) { unsub(); resolve(); }
+      });
+    });
+
+    // Load profile via server API (Admin SDK — bypasses client Firestore timing).
     const idToken = await cred.user.getIdToken();
     const res = await fetch("/api/profile", {
       headers: { Authorization: `Bearer ${idToken}` },

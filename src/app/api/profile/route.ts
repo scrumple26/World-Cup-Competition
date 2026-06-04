@@ -117,11 +117,25 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { logoUrl?: string };
-  if (!body.logoUrl) return NextResponse.json({ error: "logoUrl required" }, { status: 400 });
+  const body = (await req.json().catch(() => ({}))) as {
+    logoUrl?: string;
+    firstName?: string;
+    lastName?: string;
+    teamName?: string;
+  };
+
+  const updates: Record<string, string> = {};
+  if (body.logoUrl)  updates.logoUrl  = body.logoUrl;
+  if (body.firstName?.trim()) updates.firstName = body.firstName.trim();
+  if (body.lastName?.trim())  updates.lastName  = body.lastName.trim();
+  if (body.teamName?.trim())  updates.teamName  = body.teamName.trim();
+
+  if (!Object.keys(updates).length) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
 
   const ref = db.collection("users").doc(uid);
-  await ref.update({ logoUrl: body.logoUrl });
+  await ref.update(updates);
   const updated = await ref.get();
   return NextResponse.json(updated.data());
 }

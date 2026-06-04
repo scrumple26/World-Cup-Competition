@@ -23,7 +23,7 @@ import { TeamBadge } from "../TeamBadge";
 import { LogoUpload } from "../LogoUpload";
 
 export function TeamProfileClient({ uid }: { uid: string }) {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const { data: league, loading: lLoading } = useLeague();
   const { data: wc, loading: wcLoading } = useWcData();
   const [preds, setPreds] = useState<{
@@ -33,6 +33,11 @@ export function TeamProfileClient({ uid }: { uid: string }) {
   } | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editFirst, setEditFirst] = useState("");
+  const [editLast, setEditLast] = useState("");
+  const [editTeam, setEditTeam] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -50,12 +55,40 @@ export function TeamProfileClient({ uid }: { uid: string }) {
   if (!profile) {
     return <p className="text-[var(--muted)]">Team not found.</p>;
   }
+  const p = profile as UserProfile; // narrowed alias for use in closures
   const score = league.scores[uid];
   const rank = buildLeaderboard(league.users, league.scores).find((r) => r.user.uid === uid)?.rank;
   const isSelf = uid === user?.uid;
 
   // logoUrl state overrides profile.logoUrl after an in-session upload
   const effectiveLogoUrl = logoUrl ?? profile.logoUrl;
+
+  function startEditing() {
+    setEditFirst(p.firstName);
+    setEditLast(p.lastName);
+    setEditTeam(p.teamName);
+    setEditing(true);
+  }
+
+  async function saveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const { getClientAuth } = await import("@/lib/firebase/client");
+      const auth = getClientAuth();
+      const token = await auth?.currentUser?.getIdToken();
+      if (!token) return;
+      await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ firstName: editFirst, lastName: editLast, teamName: editTeam }),
+      });
+      await refreshProfile();
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handleLogoPick(file: File) {
     if (!isSelf) return;
@@ -109,19 +142,38 @@ export function TeamProfileClient({ uid }: { uid: string }) {
             ) : effectiveLogoUrl ? (
               <img src={effectiveLogoUrl} alt="Team logo" className="h-[72px] w-[72px] rounded-full object-cover border border-[var(--border)]" />
             ) : null}
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">{displayName(profile)}</h1>
-                {isSelf && (
-                  <span className="chip bg-[var(--accent)]/15 text-[var(--accent)]">You</span>
-                )}
-                {profile.isAdmin && (
-                  <span className="chip bg-[var(--gold)]/15 text-[var(--gold)]">Admin</span>
-                )}
-              </div>
-              <p className="text-sm text-[var(--muted)]">{profile.teamName} · Group {profile.friendGroup}</p>
-              {isSelf && !effectiveLogoUrl && (
-                <p className="mt-0.5 text-xs text-[var(--muted)] opacity-70">Click the circle to add a team logo</p>
+            <div className="min-w-0">
+              {isSelf && editing ? (
+                <form onSubmit={saveProfile} className="space-y-2">
+                  <div className="flex gap-2">
+                    <input className="input w-28" value={editFirst} onChange={e => setEditFirst(e.target.value)} placeholder="First" required />
+                    <input className="input w-28" value={editLast} onChange={e => setEditLast(e.target.value)} placeholder="Last" required />
+                  </div>
+                  <input className="input w-full" value={editTeam} onChange={e => setEditTeam(e.target.value)} placeholder="Team name" required />
+                  <div className="flex gap-2">
+                    <button type="submit" className="btn-primary px-3 py-1.5 text-sm" disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+                    <button type="button" className="btn-ghost px-3 py-1.5 text-sm" onClick={() => setEditing(false)}>Cancel</button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold">{displayName(profile)}</h1>
+                    {isSelf && (
+                      <span className="chip bg-[var(--accent)]/15 text-[var(--accent)]">You</span>
+                    )}
+                    {profile.isAdmin && (
+                      <span className="chip bg-[var(--gold)]/15 text-[var(--gold)]">Admin</span>
+                    )}
+                    {isSelf && (
+                      <button onClick={startEditing} className="text-xs text-[var(--muted)] hover:text-[var(--fg)] ml-1">Edit</button>
+                    )}
+                  </div>
+                  <p className="text-sm text-[var(--muted)]">{profile.teamName} · Group {profile.friendGroup}</p>
+                  {isSelf && !effectiveLogoUrl && (
+                    <p className="mt-0.5 text-xs text-[var(--muted)] opacity-70">Click the circle to add a team logo</p>
+                  )}
+                </>
               )}
             </div>
           </div>
