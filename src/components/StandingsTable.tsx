@@ -41,7 +41,14 @@ export function StandingsTable({
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  <Link href={`/team/${r.user.uid}`} className="font-medium hover:underline">
+                  <Link href={`/team/${r.user.uid}`} className="flex items-center gap-2 font-medium hover:underline">
+                    {r.user.logoUrl ? (
+                      <img src={r.user.logoUrl} alt="" className="h-6 w-6 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--bg-elev)] text-[10px] font-bold text-[var(--muted)]">
+                        {r.user.teamName.charAt(0).toUpperCase()}
+                      </span>
+                    )}
                     {r.user.teamName}
                   </Link>
                 </td>

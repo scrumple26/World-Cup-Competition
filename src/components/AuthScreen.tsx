@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { LogoUpload } from "./LogoUpload";
 
 export function AuthScreen() {
   const { signUp, logIn, mockMode } = useAuth();
@@ -11,6 +12,7 @@ export function AuthScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [teamName, setTeamName] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -19,7 +21,7 @@ export function AuthScreen() {
     setError(null);
     setBusy(true);
     try {
-      if (mode === "signup") await signUp(email, password, teamName, firstName, lastName);
+      if (mode === "signup") await signUp(email, password, teamName, firstName, lastName, logoFile);
       else await logIn(email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -91,6 +93,7 @@ export function AuthScreen() {
                     required
                   />
                 </div>
+                <LogoUpload onFilePicked={setLogoFile} size={52} />
               </>
             )}
             <div>

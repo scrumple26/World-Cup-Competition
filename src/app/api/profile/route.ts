@@ -31,7 +31,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { teamName?: string; firstName?: string; lastName?: string };
+  const body = (await req.json().catch(() => ({}))) as {
+    teamName?: string;
+    firstName?: string;
+    lastName?: string;
+    logoUrl?: string;
+  };
   const teamName = (body.teamName ?? "").trim();
   const firstName = (body.firstName ?? "").trim();
   const lastName = (body.lastName ?? "").trim();
@@ -54,10 +59,42 @@ export async function POST(req: NextRequest) {
     firstName,
     lastName,
     teamName,
+    ...(body.logoUrl ? { logoUrl: body.logoUrl } : {}),
     friendGroup,
     isAdmin: email === ADMIN_EMAIL,
     createdAt: Date.now(),
   };
   await ref.set(profile);
   return NextResponse.json(profile);
+}
+
+/**
+ * PATCH /api/profile  { logoUrl }   (Authorization: Bearer <Firebase ID token>)
+ * Updates the caller's logoUrl in their profile document.
+ */
+export async function PATCH(req: NextRequest) {
+  const auth = getAdminAuth();
+  const db = getAdminDb();
+  if (!auth || !db) {
+    return NextResponse.json({ error: "Server not configured" }, { status: 503 });
+  }
+
+  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!token) return NextResponse.json({ error: "Missing token" }, { status: 401 });
+
+  let uid: string;
+  try {
+    const decoded = await auth.verifyIdToken(token);
+    uid = decoded.uid;
+  } catch {
+    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+  }
+
+  const body = (await req.json().catch(() => ({}))) as { logoUrl?: string };
+  if (!body.logoUrl) return NextResponse.json({ error: "logoUrl required" }, { status: 400 });
+
+  const ref = db.collection("users").doc(uid);
+  await ref.update({ logoUrl: body.logoUrl });
+  const updated = await ref.get();
+  return NextResponse.json(updated.data());
 }

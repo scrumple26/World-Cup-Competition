@@ -11,6 +11,7 @@ export interface UserProfile {
   firstName: string;
   lastName: string;
   teamName: string;
+  logoUrl?: string;
   friendGroup: FriendGroup;
   isAdmin: boolean;
   createdAt: number;

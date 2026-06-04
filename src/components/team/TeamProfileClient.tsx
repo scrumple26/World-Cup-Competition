@@ -20,6 +20,7 @@ import type {
 } from "@/lib/types";
 import { displayName } from "@/lib/types";
 import { TeamBadge } from "../TeamBadge";
+import { LogoUpload } from "../LogoUpload";
 
 export function TeamProfileClient({ uid }: { uid: string }) {
   const { user } = useAuth();
@@ -30,6 +31,8 @@ export function TeamProfileClient({ uid }: { uid: string }) {
     groups: Record<string, GroupPrediction>;
     third: ThirdPlacePrediction;
   } | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -51,6 +54,39 @@ export function TeamProfileClient({ uid }: { uid: string }) {
   const rank = buildLeaderboard(league.users, league.scores).find((r) => r.user.uid === uid)?.rank;
   const isSelf = uid === user?.uid;
 
+  // logoUrl state overrides profile.logoUrl after an in-session upload
+  const effectiveLogoUrl = logoUrl ?? profile.logoUrl;
+
+  async function handleLogoPick(file: File) {
+    if (!isSelf) return;
+    setLogoUploading(true);
+    try {
+      const { getClientAuth } = await import("@/lib/firebase/client");
+      const auth = getClientAuth();
+      const token = await auth?.currentUser?.getIdToken();
+      if (!token) return;
+
+      const form = new FormData();
+      form.append("image", file);
+      const uploadRes = await fetch("/api/upload-logo", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      if (!uploadRes.ok) return;
+      const { url } = await uploadRes.json() as { url: string };
+
+      await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ logoUrl: url }),
+      });
+      setLogoUrl(url);
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
   const matchById = new Map(wc.fixtures.map((m) => [m.id, m]));
   const predEntries = Object.values(preds.matches)
     .map((p) => ({ p, m: matchById.get(p.fixtureId) }))
@@ -61,17 +97,33 @@ export function TeamProfileClient({ uid }: { uid: string }) {
     <div className="space-y-5">
       <div className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{displayName(profile)}</h1>
-              {isSelf && (
-                <span className="chip bg-[var(--accent)]/15 text-[var(--accent)]">You</span>
-              )}
-              {profile.isAdmin && (
-                <span className="chip bg-[var(--gold)]/15 text-[var(--gold)]">Admin</span>
+          <div className="flex items-center gap-4">
+            {isSelf ? (
+              <LogoUpload
+                currentUrl={effectiveLogoUrl}
+                onFilePicked={handleLogoPick}
+                uploading={logoUploading}
+                size={72}
+                showLabel={false}
+              />
+            ) : effectiveLogoUrl ? (
+              <img src={effectiveLogoUrl} alt="Team logo" className="h-[72px] w-[72px] rounded-full object-cover border border-[var(--border)]" />
+            ) : null}
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold">{displayName(profile)}</h1>
+                {isSelf && (
+                  <span className="chip bg-[var(--accent)]/15 text-[var(--accent)]">You</span>
+                )}
+                {profile.isAdmin && (
+                  <span className="chip bg-[var(--gold)]/15 text-[var(--gold)]">Admin</span>
+                )}
+              </div>
+              <p className="text-sm text-[var(--muted)]">{profile.teamName} · Group {profile.friendGroup}</p>
+              {isSelf && !effectiveLogoUrl && (
+                <p className="mt-0.5 text-xs text-[var(--muted)] opacity-70">Click the circle to add a team logo</p>
               )}
             </div>
-            <p className="text-sm text-[var(--muted)]">{profile.teamName} · Group {profile.friendGroup}</p>
           </div>
           <div className="flex gap-5 text-center">
             <Stat label="Rank" value={rank ? `#${rank}` : "—"} />

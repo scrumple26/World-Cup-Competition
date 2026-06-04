@@ -28,9 +28,10 @@ import {
 interface AuthState {
   user: UserProfile | null;
   loading: boolean;
-  signUp: (email: string, password: string, teamName: string, firstName: string, lastName: string) => Promise<void>;
+  signUp: (email: string, password: string, teamName: string, firstName: string, lastName: string, logoFile?: File | null) => Promise<void>;
   logIn: (email: string, password: string) => Promise<void>;
   logOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   mockMode: boolean;
 }
 
@@ -83,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, []);
 
-  async function signUp(email: string, password: string, teamName: string, firstName: string, lastName: string) {
+  async function signUp(email: string, password: string, teamName: string, firstName: string, lastName: string, logoFile?: File | null) {
     const normEmail = email.trim().toLowerCase();
     const isAdmin = normEmail === ADMIN_EMAIL;
 
@@ -115,9 +116,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getClientAuth();
     if (!auth) throw new Error("Firebase not configured.");
     const cred = await createUserWithEmailAndPassword(auth, normEmail, password);
-    // Server creates the profile (balanced group assignment + admin flag).
     const idToken = await cred.user.getIdToken();
-    const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName);
+
+    // Upload logo first (if provided); failures are non-fatal.
+    let logoUrl: string | undefined;
+    if (logoFile) {
+      try {
+        const form = new FormData();
+        form.append("image", logoFile);
+        const res = await fetch("/api/upload-logo", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+          body: form,
+        });
+        if (res.ok) logoUrl = (await res.json()).url;
+      } catch {
+        // proceed without logo
+      }
+    }
+
+    const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName, logoUrl);
+    setUser(profile);
+  }
+
+  async function refreshProfile() {
+    if (USE_MOCK || !user) return;
+    const profile = await loadFirebaseProfile(user.uid);
     setUser(profile);
   }
 
@@ -154,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ user, loading, signUp, logIn, logOut, mockMode: USE_MOCK }}
+      value={{ user, loading, signUp, logIn, logOut, refreshProfile, mockMode: USE_MOCK }}
     >
       {children}
     </Ctx.Provider>
@@ -177,6 +201,7 @@ async function createFirebaseProfile(
   teamName: string,
   firstName: string,
   lastName: string,
+  logoUrl?: string,
 ): Promise<UserProfile> {
   const res = await fetch("/api/profile", {
     method: "POST",
@@ -184,7 +209,7 @@ async function createFirebaseProfile(
       "Content-Type": "application/json",
       Authorization: `Bearer ${idToken}`,
     },
-    body: JSON.stringify({ teamName, firstName: firstName.trim(), lastName: lastName.trim() }),
+    body: JSON.stringify({ teamName, firstName: firstName.trim(), lastName: lastName.trim(), ...(logoUrl ? { logoUrl } : {}) }),
   });
   if (!res.ok) throw new Error("Failed to create profile");
   return (await res.json()) as UserProfile;
