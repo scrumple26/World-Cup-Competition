@@ -36,6 +36,7 @@ export function toWcMatch(f: ApiFixture): WcMatch {
     homeLogo: f.teams.home.logo,
     awayLogo: f.teams.away.logo,
     goals: { home: f.goals.home, away: f.goals.away },
+    elapsed: f.fixture.status.elapsed,
   };
 }
 

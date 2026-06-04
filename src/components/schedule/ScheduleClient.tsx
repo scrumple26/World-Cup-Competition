@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWcData } from "@/lib/useWcData";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { isPlayed } from "@/lib/wcMap";
 import type { WcMatch } from "@/lib/types";
+import type { LiveMatchDetails } from "@/app/api/wc/match/[id]/live/route";
 
 // ---- constants ----
 
@@ -59,12 +60,32 @@ export function ScheduleClient() {
   const { data: wc, loading } = useWcData();
   const { user } = useAuth();
   const [filter, setFilter] = useState<Filter>("all");
-  // Live overrides keyed by fixture ID
   const [live, setLive] = useState<Record<number, WcMatch>>({});
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [liveDetails, setLiveDetails] = useState<Record<number, LiveMatchDetails>>({});
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hideScores = user?.hideScores ?? false;
 
-  // Polling effect
+  // Fetch detailed live data for the expanded match
+  const fetchDetails = useCallback(async (id: number) => {
+    try {
+      const res = await fetch(`/api/wc/match/${id}/live`);
+      if (!res.ok) return;
+      const data = await res.json() as LiveMatchDetails;
+      setLiveDetails((prev) => ({ ...prev, [id]: data }));
+    } catch { /* silent */ }
+  }, []);
+
+  // Toggle expanded match; fetch details immediately
+  function toggleExpand(id: number) {
+    setExpandedId((prev) => {
+      const next = prev === id ? null : id;
+      if (next !== null) fetchDetails(next);
+      return next;
+    });
+  }
+
+  // Score polling effect
   useEffect(() => {
     if (!wc) return;
 
@@ -81,14 +102,15 @@ export function ScheduleClient() {
           for (const m of data.matches) next[m.id] = m;
           return next;
         });
-      } catch { /* silent — stale data is fine */ }
+        // Also refresh details if a match is expanded
+        if (expandedId && ids.includes(expandedId)) fetchDetails(expandedId);
+      } catch { /* silent */ }
     }
 
-    // Poll immediately if any match is active right now
     poll();
     intervalRef.current = setInterval(poll, POLL_MS);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [wc]);
+  }, [wc, expandedId, fetchDetails]);
 
   const byDate = useMemo(() => {
     if (!wc) return [];
@@ -147,13 +169,27 @@ export function ScheduleClient() {
             {date}&nbsp;&nbsp;·&nbsp;&nbsp;Central Time
           </h2>
           <div className="card divide-y divide-[var(--border)] overflow-hidden">
-            {matches.map((m) => (
-              <MatchRow
-                key={m.id}
-                match={live[m.id] ?? m}
-                hideScores={hideScores}
-              />
-            ))}
+            {matches.map((m) => {
+              const display = live[m.id] ?? m;
+              const isLiveMatch = LIVE_STATUSES.has(display.status);
+              return (
+                <div key={m.id}>
+                  <MatchRow
+                    match={display}
+                    hideScores={hideScores}
+                    expanded={expandedId === m.id}
+                    onExpand={isLiveMatch ? () => toggleExpand(m.id) : undefined}
+                  />
+                  {expandedId === m.id && isLiveMatch && (
+                    <LivePanel
+                      details={liveDetails[m.id] ?? null}
+                      match={display}
+                      hideScores={hideScores}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
       ))}
@@ -163,12 +199,25 @@ export function ScheduleClient() {
 
 // ---- match row ----
 
-function MatchRow({ match: m, hideScores }: { match: WcMatch; hideScores: boolean }) {
+function MatchRow({
+  match: m,
+  hideScores,
+  expanded,
+  onExpand,
+}: {
+  match: WcMatch;
+  hideScores: boolean;
+  expanded?: boolean;
+  onExpand?: () => void;
+}) {
   const played = isPlayed(m);
   const isLive = LIVE_STATUSES.has(m.status);
 
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-3">
+    <div
+      className={`grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-3 ${onExpand ? "cursor-pointer hover:bg-[var(--bg-elev)]" : ""} ${expanded ? "bg-[var(--bg-elev)]" : ""}`}
+      onClick={onExpand}
+    >
       <div className="flex min-w-0 items-center justify-end gap-2">
         <span className="truncate text-sm font-medium">{m.homeTeamName}</span>
         <Flag src={m.homeLogo} alt={m.homeTeamName} />
@@ -201,20 +250,27 @@ function ScoreOrTime({
   match: WcMatch; played: boolean; live: boolean; hideScores: boolean;
 }) {
   if (live) {
+    const min = m.elapsed != null ? `${m.elapsed}'` : (m.status === "HT" ? "HT" : "");
     if (hideScores) {
       return (
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-          <span className="text-sm font-semibold text-green-400">LIVE</span>
+        <span className="flex flex-col items-center gap-0.5">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+            <span className="text-sm font-semibold text-green-400">LIVE</span>
+          </span>
+          {min && <span className="text-[10px] text-green-400/70">{min}</span>}
         </span>
       );
     }
     return (
-      <span className="flex items-center gap-1.5">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-        <span className="font-mono text-sm font-bold text-green-400">
-          {m.goals.home !== null ? `${m.goals.home} – ${m.goals.away}` : "LIVE"}
+      <span className="flex flex-col items-center gap-0.5">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+          <span className="font-mono text-sm font-bold text-green-400">
+            {m.goals.home !== null ? `${m.goals.home} – ${m.goals.away}` : "LIVE"}
+          </span>
         </span>
+        {min && <span className="text-[10px] text-green-400/70">{min}</span>}
       </span>
     );
   }
@@ -237,4 +293,108 @@ function ScoreOrTime({
   if (m.status === "CANC") return <span className="text-xs text-[var(--muted)]">Cancelled</span>;
 
   return <span className="text-sm tabular-nums">{ctTime(m.kickoff)}</span>;
+}
+
+// ---- live details panel ----
+
+const EVENT_ICON: Record<string, string> = {
+  goal: "⚽",
+  owngoal: "⚽ (OG)",
+  penalty: "⚽ (P)",
+  yellowcard: "🟨",
+  redcard: "🟥",
+  yellowredcard: "🟨🟥",
+  sub: "🔄",
+  var: "📺",
+  other: "•",
+};
+
+function LivePanel({
+  details,
+  hideScores,
+}: {
+  details: LiveMatchDetails | null;
+  match: WcMatch;
+  hideScores: boolean;
+}) {
+  if (!details) {
+    return (
+      <div className="border-t border-[var(--border)] px-4 py-3 text-xs text-[var(--muted)]">
+        Loading live details…
+      </div>
+    );
+  }
+
+  const events = details.events.filter((e) => e.type !== "other" && e.type !== "sub" || e.type === "sub");
+
+  return (
+    <div className="border-t border-[var(--border)] bg-[var(--bg-elev)] px-4 py-3 space-y-3">
+      {/* Events */}
+      {events.length > 0 && (
+        <div>
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">Match Events</div>
+          <div className="space-y-1">
+            {events.map((e, i) => (
+              <div key={i} className={`flex items-center gap-2 text-xs ${e.teamSide === "home" ? "flex-row" : "flex-row-reverse"}`}>
+                <span className="w-8 shrink-0 text-center text-[var(--muted)] tabular-nums">
+                  {e.minute}{e.extraMinute ? `+${e.extraMinute}` : ""}&apos;
+                </span>
+                <span>{EVENT_ICON[e.type] ?? "•"}</span>
+                <span className="font-medium">{e.player}</span>
+                {e.assist && e.type !== "sub" && (
+                  <span className="text-[var(--muted)]">({e.assist})</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Stats */}
+      {details.stats && !hideScores && (
+        <div>
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">Live Stats</div>
+          <div className="space-y-1.5 text-xs">
+            <StatBar label="Possession" home={details.stats.home.possession} away={details.stats.away.possession} isPercent />
+            <StatRow label="Shots" home={details.stats.home.shots} away={details.stats.away.shots} />
+            <StatRow label="On Target" home={details.stats.home.shotsOnTarget} away={details.stats.away.shotsOnTarget} />
+            <StatRow label="Corners" home={details.stats.home.corners} away={details.stats.away.corners} />
+            <StatRow label="Fouls" home={details.stats.home.fouls} away={details.stats.away.fouls} />
+          </div>
+        </div>
+      )}
+
+      {events.length === 0 && !details.stats && (
+        <p className="text-xs text-[var(--muted)]">No events yet.</p>
+      )}
+    </div>
+  );
+}
+
+function StatBar({ label, home, away, isPercent }: { label: string; home: string | number; away: string | number; isPercent?: boolean }) {
+  const h = parseFloat(String(home)) || 0;
+  const total = isPercent ? 100 : (h + (parseFloat(String(away)) || 0)) || 1;
+  const pct = Math.round((h / total) * 100);
+  return (
+    <div>
+      <div className="mb-0.5 flex justify-between text-[var(--muted)]">
+        <span>{home}{isPercent ? "" : ""}</span>
+        <span className="font-medium text-[var(--fg)]">{label}</span>
+        <span>{away}{isPercent ? "" : ""}</span>
+      </div>
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-[var(--border)]">
+        <div className="bg-[var(--accent)] transition-all" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function StatRow({ label, home, away }: { label: string; home: number; away: number }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="w-8 text-center font-medium">{home}</span>
+      <span className="text-[var(--muted)]">{label}</span>
+      <span className="w-8 text-center font-medium">{away}</span>
+    </div>
+  );
 }

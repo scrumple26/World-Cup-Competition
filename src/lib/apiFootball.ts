@@ -157,6 +157,33 @@ export async function getStandings(): Promise<ApiStandingRow[][]> {
   return resp[0]?.league.standings ?? [];
 }
 
+// ---- live match detail types ----
+
+export interface ApiMatchEvent {
+  time: { elapsed: number; extra?: number | null };
+  team: { id: number; name: string };
+  player: { id: number | null; name: string | null };
+  assist: { id: number | null; name: string | null };
+  type: string;   // "Goal" | "Card" | "subst" | "Var"
+  detail: string; // "Normal Goal" | "Own Goal" | "Penalty" | "Yellow Card" | "Red Card" | "Red Card" | "Substitution 1" …
+  comments: string | null;
+}
+
+export interface ApiMatchStatEntry {
+  team: { id: number; name: string };
+  statistics: { type: string; value: number | string | null }[];
+}
+
+/** Live events (goals, cards, subs) for a fixture (30s cache). */
+export function getMatchEvents(fixtureId: number): Promise<ApiMatchEvent[]> {
+  return apiGet<ApiMatchEvent[]>("fixtures/events", { fixture: fixtureId }, 30_000);
+}
+
+/** Live statistics (possession, shots, …) for a fixture (30s cache). */
+export function getMatchStatistics(fixtureId: number): Promise<ApiMatchStatEntry[]> {
+  return apiGet<ApiMatchStatEntry[]>("fixtures/statistics", { fixture: fixtureId }, 30_000);
+}
+
 /** Fetch live/current data for specific fixture IDs (short 30s cache). */
 export function getLiveFixtures(fixtureIds: number[]): Promise<ApiFixture[]> {
   if (fixtureIds.length === 0) return Promise.resolve([]);

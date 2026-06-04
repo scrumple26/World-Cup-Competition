@@ -47,6 +47,8 @@ export interface WcMatch {
   awayLogo: string;
   /** Final goals (regulation/result line) once played; null until then. */
   goals: { home: number | null; away: number | null };
+  /** Current minute elapsed during a live match. */
+  elapsed?: number | null;
   /** Knockout advancement (set if decided by ET/penalties). */
   decidedWinner?: Outcome;
   /** True if an admin manually set the result; sync must not overwrite. */
