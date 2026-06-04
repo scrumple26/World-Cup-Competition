@@ -192,8 +192,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function refreshProfile() {
     if (USE_MOCK || !user) return;
-    const profile = await loadFirebaseProfile(user.uid);
-    setUser(profile);
+    const { getClientAuth } = await import("../firebase/client");
+    const auth = getClientAuth();
+    const token = await auth?.currentUser?.getIdToken();
+    if (!token) return;
+    const res = await fetch("/api/profile", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const profile = await res.json() as UserProfile | null;
+      if (profile) setUser(profile);
+    }
   }
 
   async function logIn(email: string, password: string) {

@@ -35,16 +35,23 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!;
-  const bucket = storage.bucket(bucketName);
-  const storageFile = bucket.file(`logos/${uid}`);
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (!bucketName) {
+    return NextResponse.json({ error: "Storage bucket not configured" }, { status: 503 });
+  }
 
-  await storageFile.save(buffer, {
-    contentType: file.type,
-    metadata: { cacheControl: "public, max-age=31536000" },
-  });
-  await storageFile.makePublic();
-
-  const url = storageFile.publicUrl();
-  return NextResponse.json({ url });
+  try {
+    const bucket = storage.bucket(bucketName);
+    const storageFile = bucket.file(`logos/${uid}`);
+    await storageFile.save(buffer, {
+      contentType: file.type,
+      metadata: { cacheControl: "public, max-age=31536000" },
+    });
+    await storageFile.makePublic();
+    const url = storageFile.publicUrl();
+    return NextResponse.json({ url });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Storage error";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

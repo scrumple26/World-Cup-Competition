@@ -33,6 +33,7 @@ export function TeamProfileClient({ uid }: { uid: string }) {
   } | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editFirst, setEditFirst] = useState("");
   const [editLast, setEditLast] = useState("");
@@ -93,6 +94,7 @@ export function TeamProfileClient({ uid }: { uid: string }) {
   async function handleLogoPick(file: File) {
     if (!isSelf) return;
     setLogoUploading(true);
+    setLogoError(null);
     try {
       const { getClientAuth } = await import("@/lib/firebase/client");
       const auth = getClientAuth();
@@ -106,15 +108,20 @@ export function TeamProfileClient({ uid }: { uid: string }) {
         headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
-      if (!uploadRes.ok) return;
-      const { url } = await uploadRes.json() as { url: string };
+      const uploadData = await uploadRes.json() as { url?: string; error?: string };
+      if (!uploadRes.ok) {
+        setLogoError(uploadData.error ?? "Upload failed");
+        return;
+      }
 
       await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ logoUrl: url }),
+        body: JSON.stringify({ logoUrl: uploadData.url }),
       });
-      setLogoUrl(url);
+      setLogoUrl(uploadData.url);
+    } catch (err) {
+      setLogoError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setLogoUploading(false);
     }
@@ -172,6 +179,9 @@ export function TeamProfileClient({ uid }: { uid: string }) {
                   <p className="text-sm text-[var(--muted)]">{profile.teamName} · Group {profile.friendGroup}</p>
                   {isSelf && !effectiveLogoUrl && (
                     <p className="mt-0.5 text-xs text-[var(--muted)] opacity-70">Click the circle to add a team logo</p>
+                  )}
+                  {logoError && (
+                    <p className="mt-1 text-xs text-red-400">{logoError}</p>
                   )}
                 </>
               )}
