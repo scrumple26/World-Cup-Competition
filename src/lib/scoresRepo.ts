@@ -32,21 +32,7 @@ export async function loadLeague(): Promise<LeagueData> {
     return { users, scores };
   }
 
-  const { getClientDb } = await import("./firebase/client");
-  const { collection, getDocs } = await import("firebase/firestore");
-  const db = getClientDb();
-  if (!db) return { users: [], scores: {} };
-
-  const [uSnap, sSnap] = await Promise.all([
-    getDocs(collection(db, "users")),
-    getDocs(collection(db, "scores")),
-  ]);
-  const users = uSnap.docs.map((d) => d.data() as UserProfile);
-  const scores: Record<string, ScoreDoc> = {};
-  sSnap.forEach((d) => {
-    const s = d.data() as ScoreDoc;
-    scores[s.uid] = s;
-  });
-  for (const u of users) if (!scores[u.uid]) scores[u.uid] = zeroScore(u.uid);
-  return { users, scores };
+  const res = await fetch("/api/league");
+  if (!res.ok) return { users: [], scores: {} };
+  return res.json() as Promise<LeagueData>;
 }

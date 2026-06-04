@@ -9,15 +9,10 @@ export function useLeague() {
 
   useEffect(() => {
     let active = true;
-    loadLeague().then((d) => {
-      if (active) {
-        setData(d);
-        setLoading(false);
-      }
-    });
-    return () => {
-      active = false;
-    };
+    loadLeague()
+      .then((d) => { if (active) { setData(d); setLoading(false); } })
+      .catch(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   return { data, loading };

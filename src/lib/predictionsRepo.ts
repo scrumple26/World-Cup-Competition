@@ -36,21 +36,21 @@ async function adminWriteIfForOther(
   return true;
 }
 
+async function loadAllPredictions(uid: string) {
+  const res = await fetch(`/api/predictions?uid=${encodeURIComponent(uid)}`);
+  if (!res.ok) return { matches: {}, groups: {}, third: { advancing: [] } };
+  return res.json() as Promise<{
+    matches: Record<number, MatchPrediction>;
+    groups: Record<string, GroupPrediction>;
+    third: ThirdPlacePrediction;
+  }>;
+}
+
 export async function loadMatchPredictions(
   uid: string,
 ): Promise<Record<number, MatchPrediction>> {
   if (USE_MOCK) return mock.getMatchPredictions(uid);
-  const { getClientDb } = await import("./firebase/client");
-  const { collection, getDocs } = await import("firebase/firestore");
-  const db = getClientDb();
-  if (!db) return {};
-  const snap = await getDocs(collection(db, "predictions", uid, "matches"));
-  const out: Record<number, MatchPrediction> = {};
-  snap.forEach((d) => {
-    const p = d.data() as MatchPrediction;
-    out[p.fixtureId] = p;
-  });
-  return out;
+  return (await loadAllPredictions(uid)).matches;
 }
 
 export async function saveMatchPrediction(
@@ -74,17 +74,7 @@ export async function loadGroupPredictions(
   uid: string,
 ): Promise<Record<string, GroupPrediction>> {
   if (USE_MOCK) return mock.getGroupPredictions(uid);
-  const { getClientDb } = await import("./firebase/client");
-  const { collection, getDocs } = await import("firebase/firestore");
-  const db = getClientDb();
-  if (!db) return {};
-  const snap = await getDocs(collection(db, "predictions", uid, "groups"));
-  const out: Record<string, GroupPrediction> = {};
-  snap.forEach((d) => {
-    const p = d.data() as GroupPrediction;
-    out[p.group] = p;
-  });
-  return out;
+  return (await loadAllPredictions(uid)).groups;
 }
 
 export async function saveGroupPrediction(
@@ -105,12 +95,7 @@ export async function loadThirdPlace(
   uid: string,
 ): Promise<ThirdPlacePrediction> {
   if (USE_MOCK) return mock.getThirdPlacePrediction(uid);
-  const { getClientDb } = await import("./firebase/client");
-  const { doc, getDoc } = await import("firebase/firestore");
-  const db = getClientDb();
-  if (!db) return { advancing: [] };
-  const snap = await getDoc(doc(db, "predictions", uid, "meta", "thirdPlace"));
-  return snap.exists() ? (snap.data() as ThirdPlacePrediction) : { advancing: [] };
+  return (await loadAllPredictions(uid)).third;
 }
 
 export async function saveThirdPlace(
