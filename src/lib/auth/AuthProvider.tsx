@@ -63,23 +63,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (USE_MOCK) return;
     let unsub = () => {};
     (async () => {
-      const { getClientAuth } = await import("../firebase/client");
-      const { onAuthStateChanged } = await import("firebase/auth");
-      const auth = getClientAuth();
-      if (!auth) {
-        setLoading(false);
-        return;
-      }
-      unsub = onAuthStateChanged(auth, async (fbUser) => {
-        if (!fbUser) {
-          setUser(null);
+      try {
+        const { getClientAuth } = await import("../firebase/client");
+        const { onAuthStateChanged } = await import("firebase/auth");
+        const auth = getClientAuth();
+        if (!auth) {
           setLoading(false);
           return;
         }
-        const profile = await loadFirebaseProfile(fbUser.uid);
-        setUser(profile);
+        unsub = onAuthStateChanged(auth, async (fbUser) => {
+          try {
+            if (!fbUser) {
+              setUser(null);
+              return;
+            }
+            const profile = await loadFirebaseProfile(fbUser.uid);
+            setUser(profile);
+          } catch {
+            setUser(null);
+          } finally {
+            setLoading(false);
+          }
+        });
+      } catch {
+        // Firebase failed to initialise — fall through to login screen.
         setLoading(false);
-      });
+      }
     })();
     return () => unsub();
   }, []);
