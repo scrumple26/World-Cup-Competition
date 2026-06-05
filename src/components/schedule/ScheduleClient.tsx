@@ -457,7 +457,9 @@ function PredsPanel({
         <p className="text-xs text-[var(--muted)]">No predictions submitted yet.</p>
       ) : (
         <div className="space-y-1">
-          {predictions.map((p) => {
+          {[...predictions]
+            .sort((a, b) => a.teamName.localeCompare(b.teamName))
+            .map((p) => {
             const isMe = p.uid === currentUid;
             return (
               <div
