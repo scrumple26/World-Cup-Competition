@@ -22,7 +22,7 @@ export function AdminClient() {
 
   function flash(msg: string) {
     setToast(msg);
-    setTimeout(() => setToast(null), 2500);
+    setTimeout(() => setToast(null), 5000);
   }
 
   if (actAs) {
@@ -43,8 +43,13 @@ export function AdminClient() {
         <button
           className="btn-ghost"
           onClick={async () => {
+            flash("Syncing…");
             const r = await syncNow();
-            flash(r.ok ? (r.mock ? "Mock mode — nothing to sync." : "Sync triggered.") : "Sync failed.");
+            if (!r.ok) { flash(`Sync failed: ${r.error ?? "unknown error"}`); return; }
+            if (r.mock) { flash("Mock mode — nothing to sync."); return; }
+            flash(
+              `✓ Synced ${r.matchesSynced ?? 0} matches · ${r.groupsSynced ?? 0} groups · ${r.usersScored ?? 0} users scored`
+            );
           }}
         >
           ⟳ Sync results now

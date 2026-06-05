@@ -16,6 +16,10 @@ export interface AdminResult {
   ok: boolean;
   mock?: boolean;
   error?: string;
+  // Sync-specific detail fields
+  matchesSynced?: number;
+  groupsSynced?: number;
+  usersScored?: number;
 }
 
 async function post(path: string, body: unknown): Promise<AdminResult> {
@@ -25,8 +29,14 @@ async function post(path: string, body: unknown): Promise<AdminResult> {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, error: (data as { error?: string }).error };
+  const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+  return {
+    ok: res.ok,
+    error: data.error as string | undefined,
+    matchesSynced: data.matchesSynced as number | undefined,
+    groupsSynced: data.groupsSynced as number | undefined,
+    usersScored: data.usersScored as number | undefined,
+  };
 }
 
 export async function setUserGroup(
