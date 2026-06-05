@@ -25,6 +25,7 @@ export function PredictionsClient({
     loaded,
     matches,
     groupOrders,
+    groupOverridden,
     thirdPlace,
     saveStates,
     setMatch,
@@ -151,9 +152,10 @@ export function PredictionsClient({
                   key={g.group}
                   bundle={g}
                   order={groupOrders[g.group] ?? g.teams.map((t) => t.id)}
+                  overridden={!!groupOverridden[g.group]}
                   matches={matches}
                   saveStates={saveStates}
-                  onReorder={(order) => setOrder(g.group, order)}
+                  onReorder={(order, isManual) => setOrder(g.group, order, isManual)}
                   onMatchChange={setMatch}
                   userLocked={isUserLocked}
                 />

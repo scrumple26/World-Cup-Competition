@@ -73,8 +73,10 @@ export interface MatchPrediction {
 
 /** A user's predicted finishing order for one WC group (teamIds, 1st→4th). */
 export interface GroupPrediction {
-  group: string; // "Group A"
-  order: number[]; // teamIds length 4
+  group: string;    // "Group A"
+  order: number[];  // teamIds length 4
+  /** True when the user has manually overridden the auto-computed order. */
+  overridden?: boolean;
 }
 
 /** A user's picks for which 8 third-place teams advance. */

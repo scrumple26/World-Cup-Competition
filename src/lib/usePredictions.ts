@@ -28,6 +28,7 @@ import {
 export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
   const [matches, setMatches] = useState<Record<number, MatchPrediction>>({});
   const [groupOrders, setGroupOrders] = useState<Record<string, number[]>>({});
+  const [groupOverridden, setGroupOverriddenState] = useState<Record<string, boolean>>({});
   const [thirdPlace, setThirdPlaceState] = useState<number[]>([]);
   const [saveStates, setSaveStates] = useState<Record<number, SaveState>>({});
   const [loaded, setLoaded] = useState(false);
@@ -45,9 +46,14 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
         if (!active) return;
         setMatches(d.matches ?? {});
         const orders: Record<string, number[]> = {};
-        for (const [k, v] of Object.entries(d.groups ?? {}))
-          orders[k] = (v as GroupPrediction).order;
+        const overrides: Record<string, boolean> = {};
+        for (const [k, v] of Object.entries(d.groups ?? {})) {
+          const gp = v as GroupPrediction;
+          orders[k] = gp.order;
+          if (gp.overridden) overrides[k] = true;
+        }
         setGroupOrders(orders);
+        setGroupOverriddenState(overrides);
         setThirdPlaceState((d.third as ThirdPlacePrediction)?.advancing ?? []);
         setIsUserLocked(!!d.userLocked);
         setLoaded(true);
@@ -101,9 +107,10 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
 
   // Group ordering — auto-save immediately
   const setOrder = useCallback(
-    (group: string, order: number[]) => {
+    (group: string, order: number[], overridden = false) => {
       setGroupOrders(prev => ({ ...prev, [group]: order }));
-      if (uid) void saveGroupPrediction(uid, { group, order });
+      setGroupOverriddenState(prev => ({ ...prev, [group]: overridden }));
+      if (uid) void saveGroupPrediction(uid, { group, order, overridden });
     },
     [uid],
   );
@@ -152,6 +159,7 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
     loaded,
     matches,
     groupOrders,
+    groupOverridden,
     thirdPlace,
     saveStates,
     setMatch,
