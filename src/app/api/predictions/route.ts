@@ -16,10 +16,11 @@ export async function GET(req: NextRequest) {
   const db = getAdminDb();
   if (!db) return NextResponse.json({ matches: {}, groups: {}, third: { advancing: [] } });
 
-  const [mSnap, gSnap, tSnap] = await Promise.all([
+  const [mSnap, gSnap, tSnap, lockSnap] = await Promise.all([
     db.collection("predictions").doc(uid).collection("matches").get(),
     db.collection("predictions").doc(uid).collection("groups").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("thirdPlace").get(),
+    db.collection("predictions").doc(uid).collection("meta").doc("userLock").get(),
   ]);
 
   const matches: Record<number, MatchPrediction> = {};
@@ -38,5 +39,5 @@ export async function GET(req: NextRequest) {
     ? (tSnap.data() as ThirdPlacePrediction)
     : { advancing: [] };
 
-  return NextResponse.json({ matches, groups, third });
+  return NextResponse.json({ matches, groups, third, userLocked: lockSnap.exists });
 }

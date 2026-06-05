@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -30,10 +30,16 @@ export function PredictionsClient({
     setMatch,
     setOrder,
     toggleThird,
+    lockIn,
+    isUserLocked,
+    locking,
+    pendingCount,
   } = usePredictions(targetUid, groups);
 
   const [mode, setMode] = useState<Mode>("group");
   const [stage, setStage] = useState<Stage>("group");
+  const [confirming, setConfirming] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
 
   if (loading || !loaded) {
     return <p className="text-[var(--muted)]">Loading World Cup fixtures…</p>;
@@ -47,16 +53,46 @@ export function PredictionsClient({
   }
 
   const totalMatches = data?.fixtures.length ?? 0;
-  const predicted = Object.keys(matches).length;
+  const savedCount = Object.keys(matches).length - pendingCount;
+  const isAdmin = !!actAs; // Admin mode — preserve auto-save behaviour
+
+  async function handleLockIn() {
+    setLockError(null);
+    try {
+      await lockIn();
+      setConfirming(false);
+    } catch (err) {
+      setLockError(err instanceof Error ? err.message : "Lock-in failed — try again.");
+    }
+  }
 
   return (
     <div className="space-y-5">
       {actAs && (
         <div className="rounded-lg bg-[var(--gold)]/10 px-4 py-2 text-sm text-[var(--gold)]">
-          Admin: editing predictions for <b>{actAs.teamName}</b>. Changes save to
-          their account.
+          Admin: editing predictions for <b>{actAs.teamName}</b>.
         </div>
       )}
+
+      {/* Locked banner */}
+      {isUserLocked && !isAdmin && (
+        <div className="rounded-lg border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-3 text-sm">
+          <span className="font-semibold text-[var(--accent)]">🔒 Predictions locked in.</span>
+          <span className="ml-2 text-[var(--muted)]">
+            Your picks are submitted. Scores lock individually at each kickoff.
+          </span>
+        </div>
+      )}
+
+      {/* Pending picks banner */}
+      {!isUserLocked && !isAdmin && pendingCount > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-300">
+          <span className="font-semibold">{pendingCount} unsaved pick{pendingCount !== 1 ? "s" : ""}</span>
+          <span className="ml-2 opacity-80">— scroll down and hit <b>Lock In</b> to submit.</span>
+        </div>
+      )}
+
+      {/* Stage tabs */}
       <div className="flex rounded-lg border border-[var(--border)] p-1 sm:w-fit">
         {(
           [
@@ -84,63 +120,120 @@ export function PredictionsClient({
         />
       ) : (
         <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Group Stage Predictions</h1>
-          <p className="text-sm text-[var(--muted)]">
-            {predicted}/{totalMatches} match scores entered · auto-saved
-          </p>
-        </div>
-        <div className="flex rounded-lg border border-[var(--border)] p-1">
-          {(
-            [
-              ["group", "By group"],
-              ["flash", "Flashcards"],
-            ] as const
-          ).map(([m, label]) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
-                mode === m
-                  ? "bg-[var(--accent)] text-white"
-                  : "text-[var(--muted)]"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold">Group Stage Predictions</h1>
+              <p className="text-sm text-[var(--muted)]">
+                {savedCount} saved · {pendingCount > 0 ? `${pendingCount} pending · ` : ""}{totalMatches} total
+              </p>
+            </div>
+            <div className="flex rounded-lg border border-[var(--border)] p-1">
+              {(
+                [
+                  ["group", "By group"],
+                  ["flash", "Flashcards"],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                    mode === m ? "bg-[var(--accent)] text-white" : "text-[var(--muted)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {mode === "flash" ? (
-        <FlashcardMode
-          groups={groups}
-          matches={matches}
-          saveStates={saveStates}
-          onMatchChange={setMatch}
-        />
-      ) : (
-        <div className="space-y-4">
-          {groups.map((g) => (
-            <GroupSection
-              key={g.group}
-              bundle={g}
-              order={groupOrders[g.group] ?? g.teams.map((t) => t.id)}
+          {mode === "flash" ? (
+            <FlashcardMode
+              groups={groups}
               matches={matches}
               saveStates={saveStates}
-              onReorder={(order) => setOrder(g.group, order)}
               onMatchChange={setMatch}
             />
-          ))}
-          <ThirdPlaceSelector
-            groups={groups}
-            groupOrders={groupOrders}
-            selected={thirdPlace}
-            onToggle={toggleThird}
-          />
-        </div>
-      )}
+          ) : (
+            <div className="space-y-4">
+              {groups.map((g) => (
+                <GroupSection
+                  key={g.group}
+                  bundle={g}
+                  order={groupOrders[g.group] ?? g.teams.map((t) => t.id)}
+                  matches={matches}
+                  saveStates={saveStates}
+                  onReorder={(order) => setOrder(g.group, order)}
+                  onMatchChange={setMatch}
+                  userLocked={isUserLocked}
+                />
+              ))}
+              <ThirdPlaceSelector
+                groups={groups}
+                groupOrders={groupOrders}
+                selected={thirdPlace}
+                onToggle={toggleThird}
+              />
+            </div>
+          )}
+
+          {/* Lock In section — only shown to real users, not admin acting-as */}
+          {!isAdmin && (
+            <div className="card p-5 space-y-3">
+              {isUserLocked ? (
+                <div className="text-center">
+                  <div className="text-2xl mb-1">🔒</div>
+                  <div className="font-semibold">Your predictions are locked in</div>
+                  <div className="text-sm text-[var(--muted)] mt-1">
+                    Individual match picks still lock automatically at kickoff.
+                  </div>
+                </div>
+              ) : confirming ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold">
+                    Lock in {Object.keys(matches).length} prediction{Object.keys(matches).length !== 1 ? "s" : ""}?
+                  </p>
+                  <p className="text-sm text-[var(--muted)]">
+                    Once locked, you won&apos;t be able to change your picks. Make sure you&apos;re happy with all your scores, group finishes, and third-place selections.
+                  </p>
+                  {lockError && <p className="text-sm text-red-400">{lockError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleLockIn}
+                      disabled={locking}
+                      className="btn-primary flex-1"
+                    >
+                      {locking ? "Locking in…" : "Yes, lock in my predictions"}
+                    </button>
+                    <button
+                      onClick={() => setConfirming(false)}
+                      className="btn-ghost flex-1"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold">Ready to submit?</div>
+                    <div className="text-sm text-[var(--muted)]">
+                      {pendingCount > 0
+                        ? `You have ${pendingCount} unsaved pick${pendingCount !== 1 ? "s" : ""}. Lock in to submit everything.`
+                        : "Lock in your picks to finalise your predictions."}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setConfirming(true)}
+                    disabled={Object.keys(matches).length === 0}
+                    className="btn-primary px-6"
+                  >
+                    🔒 Lock In Predictions
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

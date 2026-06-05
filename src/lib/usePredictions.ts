@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   GroupPrediction,
   MatchPrediction,
@@ -10,49 +10,64 @@ import type {
 import type { GroupBundle } from "./wcClient";
 import type { SaveState } from "@/components/predictions/MatchPredictionCard";
 import {
-  loadGroupPredictions,
-  loadMatchPredictions,
-  loadThirdPlace,
   saveGroupPrediction,
-  saveMatchPrediction,
   saveThirdPlace,
 } from "./predictionsRepo";
 
 /**
- * Loads and persists a user's predictions. Group finish orders auto-populate
- * from the current WC standings until the user reorders them.
+ * Loads and persists a user's predictions.
+ *
+ * Match score predictions use a SOFT-SAVE model:
+ *   - setMatch() stores changes in local state only (no Firestore)
+ *   - lockIn() submits everything to Firestore via /api/lock-in
+ *   - isUserLocked becomes true after lock-in (loaded from Firestore on mount)
+ *
+ * Group ordering and third-place picks auto-save as before.
  */
 export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
-  const [matches, setMatches] = useState<Record<number, MatchPrediction>>({});
+  // Firestore-persisted predictions (loaded on mount)
+  const [savedMatches, setSavedMatches] = useState<Record<number, MatchPrediction>>({});
+  // Local unsaved changes (soft saves — not in Firestore yet)
+  const [localChanges, setLocalChanges] = useState<Record<number, MatchPrediction>>({});
   const [groupOrders, setGroupOrders] = useState<Record<string, number[]>>({});
   const [thirdPlace, setThirdPlaceState] = useState<number[]>([]);
-  const [saveStates, setSaveStates] = useState<Record<number, SaveState>>({});
+  const [saveStates] = useState<Record<number, SaveState>>({});
   const [loaded, setLoaded] = useState(false);
-  const timers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const [isUserLocked, setIsUserLocked] = useState(false);
+  const [locking, setLocking] = useState(false);
+
+  // Merge: local changes override saved for display purposes
+  const matches = useMemo(
+    () => ({ ...savedMatches, ...localChanges }),
+    [savedMatches, localChanges],
+  );
+
+  const pendingCount = Object.keys(localChanges).length;
 
   // Initial load
   useEffect(() => {
     if (!uid) return;
     let active = true;
     Promise.all([
-      loadMatchPredictions(uid),
-      loadGroupPredictions(uid),
-      loadThirdPlace(uid),
-    ]).then(([m, g, t]) => {
+      // Use /api/predictions which returns userLocked status
+      fetch(`/api/predictions?uid=${uid}`)
+        .then(r => r.json())
+        .then(d => ({ matches: d.matches ?? {}, groups: d.groups ?? {}, third: d.third ?? { advancing: [] }, userLocked: !!d.userLocked })),
+      // Group orders and third place via repo (already goes through server API)
+    ]).then(([data]) => {
       if (!active) return;
-      setMatches(m);
+      setSavedMatches(data.matches);
       const orders: Record<string, number[]> = {};
-      for (const [k, v] of Object.entries(g)) orders[k] = v.order;
+      for (const [k, v] of Object.entries(data.groups)) orders[k] = (v as GroupPrediction).order;
       setGroupOrders(orders);
-      setThirdPlaceState(t.advancing);
+      setThirdPlaceState((data.third as ThirdPlacePrediction).advancing ?? []);
+      setIsUserLocked(data.userLocked);
       setLoaded(true);
-    });
-    return () => {
-      active = false;
-    };
+    }).catch(() => { if (active) setLoaded(true); });
+    return () => { active = false; };
   }, [uid]);
 
-  // Auto-populate any missing group order from standings order (bundle.teams).
+  // Auto-populate missing group orders from standings
   useEffect(() => {
     if (!loaded || groups.length === 0) return;
     setGroupOrders((prev) => {
@@ -68,37 +83,64 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
     });
   }, [loaded, groups]);
 
+  /**
+   * Soft-save a match prediction — stores in local state only.
+   * Nothing is written to Firestore until lockIn() is called.
+   */
   const setMatch = useCallback(
     (fixtureId: number, home: number | null, away: number | null, predictedWinner?: Outcome) => {
-      setMatches((prev) => ({
+      if (home === null || away === null) return;
+      setLocalChanges((prev) => ({
         ...prev,
         [fixtureId]: {
           ...prev[fixtureId],
-          fixtureId,
-          home: home ?? 0,
-          away: away ?? 0,
-          submittedAt: Date.now(),
-          ...(predictedWinner !== undefined ? { predictedWinner } : {}),
-        },
-      }));
-      if (home === null || away === null) return;
-      if (!uid) return;
-      setSaveStates((s) => ({ ...s, [fixtureId]: "saving" }));
-      clearTimeout(timers.current[fixtureId]);
-      timers.current[fixtureId] = setTimeout(async () => {
-        await saveMatchPrediction(uid, {
           fixtureId,
           home,
           away,
           submittedAt: Date.now(),
           ...(predictedWinner !== undefined ? { predictedWinner } : {}),
-        });
-        setSaveStates((s) => ({ ...s, [fixtureId]: "saved" }));
-      }, 500);
+        },
+      }));
     },
-    [uid],
+    [],
   );
 
+  /**
+   * Lock in all predictions — saves every prediction (saved + local) to Firestore.
+   * After this, isUserLocked = true and inputs are disabled.
+   */
+  const lockIn = useCallback(async () => {
+    if (!uid || locking) return;
+    setLocking(true);
+    try {
+      const all = { ...savedMatches, ...localChanges };
+      const predictions = Object.values(all);
+
+      const { getClientAuth } = await import("./firebase/client");
+      const auth = getClientAuth();
+      const token = await auth?.currentUser?.getIdToken();
+      if (!token) throw new Error("Not signed in");
+
+      const res = await fetch("/api/lock-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ predictions }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(error ?? "Lock-in failed");
+      }
+
+      // Merge local into saved and clear pending changes
+      setSavedMatches(all);
+      setLocalChanges({});
+      setIsUserLocked(true);
+    } finally {
+      setLocking(false);
+    }
+  }, [uid, savedMatches, localChanges, locking]);
+
+  // Group ordering — still auto-saves
   const setOrder = useCallback(
     (group: string, order: number[]) => {
       setGroupOrders((prev) => ({ ...prev, [group]: order }));
@@ -110,6 +152,7 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
     [uid],
   );
 
+  // Third-place — still auto-saves
   const toggleThird = useCallback(
     (teamId: number, max: number) => {
       setThirdPlaceState((prev) => {
@@ -136,5 +179,9 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
     setMatch,
     setOrder,
     toggleThird,
+    lockIn,
+    isUserLocked,
+    locking,
+    pendingCount,
   };
 }

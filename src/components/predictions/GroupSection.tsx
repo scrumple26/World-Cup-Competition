@@ -13,6 +13,7 @@ export function GroupSection({
   saveStates,
   onReorder,
   onMatchChange,
+  userLocked = false,
 }: {
   bundle: GroupBundle;
   order: number[];
@@ -20,6 +21,7 @@ export function GroupSection({
   saveStates: Record<number, SaveState>;
   onReorder: (order: number[]) => void;
   onMatchChange: (fixtureId: number, home: number | null, away: number | null) => void;
+  userLocked?: boolean;
 }) {
   return (
     <section className="card p-4">
@@ -53,7 +55,7 @@ export function GroupSection({
                   match={m}
                   home={pred ? pred.home : null}
                   away={pred ? pred.away : null}
-                  locked={isLocked(m)}
+                  locked={isLocked(m) || userLocked}
                   saveState={saveStates[m.id]}
                   onChange={(h, a) => onMatchChange(m.id, h, a)}
                 />
