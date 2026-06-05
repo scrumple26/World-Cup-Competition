@@ -94,12 +94,14 @@ function Row({
           >
             ▼
           </button>
-          {/* Drag handle — kept for desktop power users */}
+          {/* Drag handle — touch-action:none prevents the page from scrolling
+               when the user touches this specific element, letting dnd-kit take over */}
           <button
             {...attributes}
             {...listeners}
             aria-label={`Drag to reorder ${team.name}`}
-            className="hidden sm:flex h-7 w-7 cursor-grab items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--bg-card)] active:cursor-grabbing"
+            style={{ touchAction: "none" }}
+            className="flex h-7 w-7 cursor-grab items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--bg-card)] active:cursor-grabbing"
           >
             ⠿
           </button>
@@ -121,8 +123,8 @@ export function GroupFinishOrder({
   onReorder: (order: number[]) => void;
 }) {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
