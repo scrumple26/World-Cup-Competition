@@ -99,6 +99,18 @@ export default function RulesPage() {
           <li>Correct away score <Pts>0.5 pt</Pts></li>
           <li>Perfect score (both sides exact) <Pts>+1 bonus</Pts></li>
         </ul>
+        <div className="rounded-lg bg-[var(--bg-elev)] px-4 py-3 text-sm space-y-1">
+          <p className="font-semibold">Predicting ties in knockout matches:</p>
+          <p className="text-[var(--muted)]">
+            If you predict a draw (e.g. 1–1), you <b>must also pick which team
+            wins</b> — that pick is used for your outcome point.
+          </p>
+          <p className="text-[var(--muted)]">
+            <b>Penalties don&apos;t affect score accuracy.</b> Score points (exact home/away goals)
+            are based on the regulation or extra-time scoreline only — not the
+            penalty shootout result.
+          </p>
+        </div>
         <p className="text-[var(--muted)]">
           Tiebreaker for a knockout matchup: total points across the group stage and
           knockout so far.

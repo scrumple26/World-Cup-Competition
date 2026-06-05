@@ -63,6 +63,12 @@ export interface MatchPrediction {
   submittedAt: number;
   /** Set true once locked at kickoff. */
   locked?: boolean;
+  /**
+   * For knockout matches where the user predicts a draw scoreline,
+   * they must also pick who wins (penalties/ET). This field stores
+   * that pick and is used as the predicted outcome for scoring.
+   */
+  predictedWinner?: Outcome;
 }
 
 /** A user's predicted finishing order for one WC group (teamIds, 1st→4th). */

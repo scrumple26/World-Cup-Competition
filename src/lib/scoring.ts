@@ -59,13 +59,20 @@ export function scoreMatch(
   pred: ScoreLine,
   actual: ScoreLine,
   actualOutcomeOverride?: Outcome,
+  /** For knockout matches: the user's explicit winner pick when they predicted a draw. */
+  predictedWinner?: Outcome,
 ): MatchScoreBreakdown {
   const homeExact = pred.home === actual.home ? POINTS.exactSide : 0;
   const awayExact = pred.away === actual.away ? POINTS.exactSide : 0;
   const perfect = homeExact > 0 && awayExact > 0;
   const perfectBonus = perfect ? POINTS.perfectBonus : 0;
 
-  const predOutcome = outcomeOf(pred.home, pred.away);
+  // Use the explicit winner pick if the user predicted a draw AND a winner was set.
+  const derivedPredOutcome = outcomeOf(pred.home, pred.away);
+  const predOutcome =
+    derivedPredOutcome === "draw" && predictedWinner
+      ? predictedWinner
+      : derivedPredOutcome;
   const actualOutcome = actualOutcomeOverride ?? outcomeOf(actual.home, actual.away);
   const outcome = predOutcome === actualOutcome ? POINTS.outcome : 0;
 

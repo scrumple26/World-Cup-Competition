@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   GroupPrediction,
   MatchPrediction,
+  Outcome,
   ThirdPlacePrediction,
 } from "./types";
 import type { GroupBundle } from "./wcClient";
@@ -68,17 +69,19 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
   }, [loaded, groups]);
 
   const setMatch = useCallback(
-    (fixtureId: number, home: number | null, away: number | null) => {
+    (fixtureId: number, home: number | null, away: number | null, predictedWinner?: Outcome) => {
       setMatches((prev) => ({
         ...prev,
         [fixtureId]: {
+          ...prev[fixtureId],
           fixtureId,
           home: home ?? 0,
           away: away ?? 0,
           submittedAt: Date.now(),
+          ...(predictedWinner !== undefined ? { predictedWinner } : {}),
         },
       }));
-      if (home === null || away === null) return; // wait for both sides
+      if (home === null || away === null) return;
       if (!uid) return;
       setSaveStates((s) => ({ ...s, [fixtureId]: "saving" }));
       clearTimeout(timers.current[fixtureId]);
@@ -88,6 +91,7 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
           home,
           away,
           submittedAt: Date.now(),
+          ...(predictedWinner !== undefined ? { predictedWinner } : {}),
         });
         setSaveStates((s) => ({ ...s, [fixtureId]: "saved" }));
       }, 500);

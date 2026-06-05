@@ -55,6 +55,7 @@ export function computeUserScore(
       { home: p.home, away: p.away },
       { home: m.home, away: m.away },
       m.decidedWinner,
+      p.predictedWinner,
     );
     if (m.isGroupStage) groupPts += b.total;
     else knockoutPts += b.total;

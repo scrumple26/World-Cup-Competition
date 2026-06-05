@@ -141,7 +141,7 @@ export function WorldCupClient() {
       )}
 
       {!noData && tab === "standings" && <StandingsView standings={displayStandings} />}
-      {!noData && tab === "schedule"  && <ScheduleClient />}
+      {!noData && tab === "schedule"  && <ScheduleClient hideFilter />}
       {!noData && tab === "knockout"  && <KnockoutView fixtures={wc.fixtures} />}
     </div>
   );

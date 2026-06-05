@@ -58,7 +58,7 @@ const FILTERS: [Filter, string][] = [["all", "All"], ["group", "Group Stage"], [
 
 // ---- main component ----
 
-export function ScheduleClient() {
+export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean }) {
   const { data: wc, loading } = useWcData();
   const { user } = useAuth();
   const [filter, setFilter] = useState<Filter>("all");
@@ -152,12 +152,12 @@ export function ScheduleClient() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Schedule</h1>
+        {!hideFilter && <h1 className="text-2xl font-bold">Schedule</h1>}
         <div className="flex items-center gap-3">
           {hideScores && (
             <span className="text-xs text-amber-400/80">Scores hidden</span>
           )}
-          <div className="flex gap-1 rounded-lg border border-[var(--border)] p-1">
+          {!hideFilter && <div className="flex gap-1 rounded-lg border border-[var(--border)] p-1">
             {FILTERS.map(([val, label]) => (
               <button
                 key={val}
@@ -171,7 +171,7 @@ export function ScheduleClient() {
                 {label}
               </button>
             ))}
-          </div>
+          </div>}
         </div>
       </div>
 
