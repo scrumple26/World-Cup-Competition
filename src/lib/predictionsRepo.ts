@@ -2,7 +2,11 @@
 
 /**
  * Unified predictions read/write that works in mock mode (localStorage) and
- * Firebase mode (Firestore). UI code calls these and never branches on mode.
+ * Firebase mode.
+ *
+ * ALL writes in Firebase mode go through POST /api/predictions which uses
+ * the Admin SDK — this bypasses Firestore client auth timing issues that
+ * caused saves to fail silently after navigation.
  */
 
 import { USE_MOCK } from "./config";
@@ -13,10 +17,17 @@ import type {
 } from "./types";
 import * as mock from "./mock/store";
 
+/** Get a Firebase ID token for the current user. */
+async function getToken(): Promise<string | null> {
+  const { getClientAuth } = await import("./firebase/client");
+  const auth = getClientAuth();
+  return auth?.currentUser?.getIdToken() ?? null;
+}
+
 /**
- * In Firebase mode, writing predictions for a uid other than the signed-in user
- * (admin acting on someone's behalf) is blocked by security rules, so it routes
- * through the admin API. Returns true if it handled the write.
+ * For admin-on-behalf-of writes, the token belongs to the admin
+ * but we pass the target uid — the admin API handles it.
+ * Returns true if the write was handled, false if it's a self-write.
  */
 async function adminWriteIfForOther(
   uid: string,
@@ -36,6 +47,24 @@ async function adminWriteIfForOther(
   return true;
 }
 
+/** Save via POST /api/predictions (Admin SDK — always works). */
+async function serverSave(
+  type: "match" | "group" | "third",
+  payload: unknown,
+): Promise<void> {
+  const token = await getToken();
+  if (!token) throw new Error("Not signed in");
+  const res = await fetch("/api/predictions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ type, payload }),
+  });
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(error ?? "Save failed");
+  }
+}
+
 async function loadAllPredictions(uid: string) {
   const res = await fetch(`/api/predictions?uid=${encodeURIComponent(uid)}`);
   if (!res.ok) return { matches: {}, groups: {}, third: { advancing: [] } };
@@ -46,81 +75,35 @@ async function loadAllPredictions(uid: string) {
   }>;
 }
 
-export async function loadMatchPredictions(
-  uid: string,
-): Promise<Record<number, MatchPrediction>> {
+export async function loadMatchPredictions(uid: string): Promise<Record<number, MatchPrediction>> {
   if (USE_MOCK) return mock.getMatchPredictions(uid);
   return (await loadAllPredictions(uid)).matches;
 }
 
-export async function saveMatchPrediction(
-  uid: string,
-  pred: MatchPrediction,
-): Promise<void> {
+export async function saveMatchPrediction(uid: string, pred: MatchPrediction): Promise<void> {
   if (USE_MOCK) return mock.saveMatchPrediction(uid, pred);
   if (await adminWriteIfForOther(uid, "match", pred)) return;
-  const { getClientDb } = await import("./firebase/client");
-  const { doc, setDoc } = await import("firebase/firestore");
-  const db = getClientDb();
-  if (!db) throw new Error("Firestore not available — prediction not saved.");
-  try {
-    await setDoc(
-      doc(db, "predictions", uid, "matches", String(pred.fixtureId)),
-      pred,
-      { merge: true },
-    );
-  } catch (err) {
-    console.error("[saveMatchPrediction] Firestore write failed:", err);
-    throw new Error("Failed to save prediction. Please try again.");
-  }
+  await serverSave("match", pred);
 }
 
-export async function loadGroupPredictions(
-  uid: string,
-): Promise<Record<string, GroupPrediction>> {
+export async function loadGroupPredictions(uid: string): Promise<Record<string, GroupPrediction>> {
   if (USE_MOCK) return mock.getGroupPredictions(uid);
   return (await loadAllPredictions(uid)).groups;
 }
 
-export async function saveGroupPrediction(
-  uid: string,
-  pred: GroupPrediction,
-): Promise<void> {
+export async function saveGroupPrediction(uid: string, pred: GroupPrediction): Promise<void> {
   if (USE_MOCK) return mock.saveGroupPrediction(uid, pred);
   if (await adminWriteIfForOther(uid, "group", pred)) return;
-  const { getClientDb } = await import("./firebase/client");
-  const { doc, setDoc } = await import("firebase/firestore");
-  const db = getClientDb();
-  if (!db) throw new Error("Firestore not available — prediction not saved.");
-  try {
-    await setDoc(doc(db, "predictions", uid, "groups", pred.group), pred);
-  } catch (err) {
-    console.error("[saveGroupPrediction] Firestore write failed:", err);
-    throw new Error("Failed to save group prediction. Please try again.");
-  }
+  await serverSave("group", pred);
 }
 
-export async function loadThirdPlace(
-  uid: string,
-): Promise<ThirdPlacePrediction> {
+export async function loadThirdPlace(uid: string): Promise<ThirdPlacePrediction> {
   if (USE_MOCK) return mock.getThirdPlacePrediction(uid);
   return (await loadAllPredictions(uid)).third;
 }
 
-export async function saveThirdPlace(
-  uid: string,
-  pred: ThirdPlacePrediction,
-): Promise<void> {
+export async function saveThirdPlace(uid: string, pred: ThirdPlacePrediction): Promise<void> {
   if (USE_MOCK) return mock.saveThirdPlacePrediction(uid, pred);
   if (await adminWriteIfForOther(uid, "third", pred)) return;
-  const { getClientDb } = await import("./firebase/client");
-  const { doc, setDoc } = await import("firebase/firestore");
-  const db = getClientDb();
-  if (!db) throw new Error("Firestore not available — prediction not saved.");
-  try {
-    await setDoc(doc(db, "predictions", uid, "meta", "thirdPlace"), pred);
-  } catch (err) {
-    console.error("[saveThirdPlace] Firestore write failed:", err);
-    throw new Error("Failed to save third-place prediction. Please try again.");
-  }
+  await serverSave("third", pred);
 }

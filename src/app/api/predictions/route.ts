@@ -1,6 +1,6 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import type { GroupPrediction, MatchPrediction, ThirdPlacePrediction } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -40,4 +40,52 @@ export async function GET(req: NextRequest) {
     : { advancing: [] };
 
   return NextResponse.json({ matches, groups, third, userLocked: lockSnap.exists });
+}
+
+/**
+ * POST /api/predictions   (Authorization: Bearer <Firebase ID token>)
+ * Body: { type: "match" | "group" | "third", payload }
+ * Saves a single prediction using Admin SDK — bypasses Firestore client auth timing issues.
+ */
+export async function POST(req: NextRequest) {
+  const auth = getAdminAuth();
+  const db = getAdminDb();
+  if (!auth || !db) return NextResponse.json({ error: "Server not configured" }, { status: 503 });
+
+  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!token) return NextResponse.json({ error: "Missing token" }, { status: 401 });
+
+  let uid: string;
+  try {
+    const decoded = await auth.verifyIdToken(token);
+    uid = decoded.uid;
+  } catch {
+    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+  }
+
+  const body = (await req.json().catch(() => ({}))) as {
+    type?: "match" | "group" | "third";
+    payload?: unknown;
+  };
+
+  const predRef = db.collection("predictions").doc(uid);
+
+  try {
+    if (body.type === "match") {
+      const p = body.payload as MatchPrediction;
+      await predRef.collection("matches").doc(String(p.fixtureId)).set(p, { merge: true });
+    } else if (body.type === "group") {
+      const p = body.payload as GroupPrediction;
+      await predRef.collection("groups").doc(p.group).set(p);
+    } else if (body.type === "third") {
+      const p = body.payload as ThirdPlacePrediction;
+      await predRef.collection("meta").doc("thirdPlace").set(p);
+    } else {
+      return NextResponse.json({ error: "Invalid type" }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
