@@ -137,7 +137,12 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
     try {
       const { getClientAuth } = await import("./firebase/client");
       const auth = getClientAuth();
-      const token = await auth?.currentUser?.getIdToken();
+      if (!auth) throw new Error("Firebase not configured");
+      try {
+        // @ts-expect-error authStateReady exists in Firebase Auth v9.22+
+        if (typeof auth.authStateReady === "function") await auth.authStateReady();
+      } catch { /* non-fatal */ }
+      const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Not signed in");
 
       const res = await fetch("/api/lock-in", {

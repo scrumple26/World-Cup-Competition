@@ -17,11 +17,22 @@ import type {
 } from "./types";
 import * as mock from "./mock/store";
 
-/** Get a Firebase ID token for the current user. */
+/** Get a Firebase ID token for the current user.
+ *  Waits for authStateReady() so we never read currentUser before the
+ *  SDK has restored the persisted session from IndexedDB.
+ */
 async function getToken(): Promise<string | null> {
   const { getClientAuth } = await import("./firebase/client");
   const auth = getClientAuth();
-  return auth?.currentUser?.getIdToken() ?? null;
+  if (!auth) return null;
+  // authStateReady() resolves once the initial auth state is determined.
+  // Without this, auth.currentUser can be null immediately after page load
+  // even though the user is signed in (the restore is async).
+  try {
+    // @ts-expect-error authStateReady exists in Firebase Auth v9.22+
+    if (typeof auth.authStateReady === "function") await auth.authStateReady();
+  } catch { /* non-fatal */ }
+  return auth.currentUser?.getIdToken() ?? null;
 }
 
 /**
