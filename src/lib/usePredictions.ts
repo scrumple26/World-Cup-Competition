@@ -139,8 +139,8 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
       const auth = getClientAuth();
       if (!auth) throw new Error("Firebase not configured");
       try {
-        // @ts-expect-error authStateReady exists in Firebase Auth v9.22+
-        if (typeof auth.authStateReady === "function") await auth.authStateReady();
+        if (typeof (auth as { authStateReady?: () => Promise<void> }).authStateReady === "function")
+          await (auth as { authStateReady: () => Promise<void> }).authStateReady();
       } catch { /* non-fatal */ }
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Not signed in");

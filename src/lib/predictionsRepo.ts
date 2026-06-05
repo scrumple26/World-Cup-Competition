@@ -29,8 +29,8 @@ async function getToken(): Promise<string | null> {
   // Without this, auth.currentUser can be null immediately after page load
   // even though the user is signed in (the restore is async).
   try {
-    // @ts-expect-error authStateReady exists in Firebase Auth v9.22+
-    if (typeof auth.authStateReady === "function") await auth.authStateReady();
+      if (typeof (auth as { authStateReady?: () => Promise<void> }).authStateReady === "function")
+      await (auth as { authStateReady: () => Promise<void> }).authStateReady();
   } catch { /* non-fatal */ }
   return auth.currentUser?.getIdToken() ?? null;
 }
