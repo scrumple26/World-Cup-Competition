@@ -58,18 +58,22 @@ function ScoreInput({
   disabled?: boolean;
   ariaLabel: string;
 }) {
+  // Use type="text" + inputMode="numeric" to avoid iOS Safari number-input quirks
+  // while still showing the numeric keyboard on mobile.
   return (
     <input
-      type="number"
-      min={0}
-      max={30}
+      type="text"
       inputMode="numeric"
+      pattern="[0-9]*"
+      maxLength={2}
       aria-label={ariaLabel}
       disabled={disabled}
-      value={value ?? ""}
+      value={value === null ? "" : String(value)}
       onChange={(e) => {
-        const v = e.target.value;
-        onChange(v === "" ? null : Math.max(0, Math.min(30, Number(v))));
+        const raw = e.target.value.replace(/[^0-9]/g, "");
+        if (raw === "") { onChange(null); return; }
+        const n = Math.min(30, parseInt(raw, 10));
+        onChange(isNaN(n) ? null : n);
       }}
       className="h-11 w-12 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] text-center text-lg font-bold outline-none focus:border-[var(--accent-2)] disabled:opacity-60"
     />

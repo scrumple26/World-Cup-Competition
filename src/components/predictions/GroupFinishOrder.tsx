@@ -4,6 +4,7 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
@@ -26,11 +27,26 @@ interface Team {
 }
 
 const POS_LABELS = ["1st", "2nd", "3rd", "4th"];
-const POS_NOTE = ["advances", "advances", "3rd place", "eliminated"];
+const POS_NOTE   = ["advances", "advances", "3rd place", "eliminated"];
 
-function Row({ team, index, disabled }: { team: Team; index: number; disabled: boolean }) {
+function Row({
+  team,
+  index,
+  total,
+  disabled,
+  onMoveUp,
+  onMoveDown,
+}: {
+  team: Team;
+  index: number;
+  total: number;
+  disabled: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: team.id, disabled });
+
   return (
     <div
       ref={setNodeRef}
@@ -44,9 +60,11 @@ function Row({ team, index, disabled }: { team: Team; index: number; disabled: b
       <span className="w-7 shrink-0 text-center text-sm font-bold text-[var(--muted)]">
         {POS_LABELS[index]}
       </span>
+
       <span className="flex-1 truncate">
         <TeamBadge name={team.name} logo={team.logo} />
       </span>
+
       <span
         className={`hidden text-[10px] sm:inline ${
           index === 3 ? "text-red-300/70" : index === 2 ? "text-[var(--gold)]" : "text-[var(--accent)]"
@@ -54,15 +72,38 @@ function Row({ team, index, disabled }: { team: Team; index: number; disabled: b
       >
         {POS_NOTE[index]}
       </span>
+
       {!disabled && (
-        <button
-          {...attributes}
-          {...listeners}
-          aria-label={`Reorder ${team.name}`}
-          className="cursor-grab px-1 text-[var(--muted)] active:cursor-grabbing"
-        >
-          ⠿
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          {/* ↑↓ arrow buttons — primary for mobile, also available on desktop */}
+          <button
+            type="button"
+            onClick={onMoveUp}
+            disabled={index === 0}
+            aria-label={`Move ${team.name} up`}
+            className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] transition hover:bg-[var(--bg-card)] hover:text-[var(--fg)] disabled:opacity-30"
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            onClick={onMoveDown}
+            disabled={index === total - 1}
+            aria-label={`Move ${team.name} down`}
+            className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] transition hover:bg-[var(--bg-card)] hover:text-[var(--fg)] disabled:opacity-30"
+          >
+            ▼
+          </button>
+          {/* Drag handle — kept for desktop power users */}
+          <button
+            {...attributes}
+            {...listeners}
+            aria-label={`Drag to reorder ${team.name}`}
+            className="hidden sm:flex h-7 w-7 cursor-grab items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--bg-card)] active:cursor-grabbing"
+          >
+            ⠿
+          </button>
+        </div>
       )}
     </div>
   );
@@ -75,14 +116,16 @@ export function GroupFinishOrder({
   onReorder,
 }: {
   teams: Team[];
-  order: number[]; // teamIds in finishing order
+  order: number[];
   disabled?: boolean;
   onReorder: (order: number[]) => void;
 }) {
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
   const byId = new Map(teams.map((t) => [t.id, t]));
   const ordered = order.map((id) => byId.get(id)).filter(Boolean) as Team[];
 
@@ -94,12 +137,30 @@ export function GroupFinishOrder({
     onReorder(arrayMove(order, oldIndex, newIndex));
   }
 
+  function moveUp(index: number) {
+    if (index === 0) return;
+    onReorder(arrayMove(order, index, index - 1));
+  }
+
+  function moveDown(index: number) {
+    if (index === order.length - 1) return;
+    onReorder(arrayMove(order, index, index + 1));
+  }
+
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <SortableContext items={order} strategy={verticalListSortingStrategy}>
         <div className="space-y-1.5">
           {ordered.map((t, i) => (
-            <Row key={t.id} team={t} index={i} disabled={disabled} />
+            <Row
+              key={t.id}
+              team={t}
+              index={i}
+              total={ordered.length}
+              disabled={disabled}
+              onMoveUp={() => moveUp(i)}
+              onMoveDown={() => moveDown(i)}
+            />
           ))}
         </div>
       </SortableContext>
