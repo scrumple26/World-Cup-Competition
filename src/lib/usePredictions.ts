@@ -97,7 +97,9 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
         try {
           await saveMatchPrediction(uid, pred);
           setSaveStates(s => ({ ...s, [fixtureId]: "saved" }));
-        } catch {
+        } catch (err) {
+          console.error("[setMatch] save failed:", err);
+          // Show "idle" (no indicator) — error already logged
           setSaveStates(s => ({ ...s, [fixtureId]: "idle" }));
         }
       }, 500);
@@ -138,10 +140,7 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
       const { getClientAuth } = await import("./firebase/client");
       const auth = getClientAuth();
       if (!auth) throw new Error("Firebase not configured");
-      try {
-        if (typeof (auth as { authStateReady?: () => Promise<void> }).authStateReady === "function")
-          await (auth as { authStateReady: () => Promise<void> }).authStateReady();
-      } catch { /* non-fatal */ }
+      try { await auth.authStateReady(); } catch { /* non-fatal */ }
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Not signed in");
 

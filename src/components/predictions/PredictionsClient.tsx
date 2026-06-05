@@ -37,9 +37,21 @@ export function PredictionsClient({
   } = usePredictions(targetUid, groups);
 
   const [mode, setMode] = useState<Mode>("group");
-  const [stage, setStage] = useState<Stage>("group");
+  const [stage, setStage] = useState<Stage>(() => {
+    // Persist selected stage (group/knockout) across navigations
+    if (typeof sessionStorage !== "undefined") {
+      const saved = sessionStorage.getItem("pred-stage");
+      if (saved === "knockout") return "knockout";
+    }
+    return "group";
+  });
   const [confirming, setConfirming] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
+
+  function changeStage(s: Stage) {
+    setStage(s);
+    try { sessionStorage.setItem("pred-stage", s); } catch { /* non-fatal */ }
+  }
 
   if (loading || !loaded) {
     return <p className="text-[var(--muted)]">Loading World Cup fixtures…</p>;
@@ -93,7 +105,7 @@ export function PredictionsClient({
         ).map(([s, label]) => (
           <button
             key={s}
-            onClick={() => setStage(s)}
+            onClick={() => changeStage(s)}
             className={`flex-1 rounded-md px-4 py-1.5 text-sm font-semibold transition sm:flex-none ${
               stage === s ? "bg-[var(--accent-2)] text-white" : "text-[var(--muted)]"
             }`}

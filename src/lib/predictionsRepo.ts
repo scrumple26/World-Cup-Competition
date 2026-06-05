@@ -23,16 +23,21 @@ import * as mock from "./mock/store";
  */
 async function getToken(): Promise<string | null> {
   const { getClientAuth } = await import("./firebase/client");
+  const { getAuth } = await import("firebase/auth");
+  const { getApps } = await import("firebase/app");
   const auth = getClientAuth();
   if (!auth) return null;
-  // authStateReady() resolves once the initial auth state is determined.
-  // Without this, auth.currentUser can be null immediately after page load
-  // even though the user is signed in (the restore is async).
-  try {
-      if (typeof (auth as { authStateReady?: () => Promise<void> }).authStateReady === "function")
-      await (auth as { authStateReady: () => Promise<void> }).authStateReady();
-  } catch { /* non-fatal */ }
-  return auth.currentUser?.getIdToken() ?? null;
+  // authStateReady() resolves once the SDK has restored any persisted session.
+  // Without this, currentUser can be null on first page load even when signed in.
+  try { await auth.authStateReady(); } catch { /* non-fatal */ }
+  if (auth.currentUser) return auth.currentUser.getIdToken();
+  // Fallback: in case getClientAuth() returned a stale instance, try every app.
+  for (const app of getApps()) {
+    const a = getAuth(app);
+    try { await a.authStateReady(); } catch { /* non-fatal */ }
+    if (a.currentUser) return a.currentUser.getIdToken();
+  }
+  return null;
 }
 
 /**
