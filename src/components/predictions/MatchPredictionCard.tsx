@@ -58,24 +58,37 @@ function ScoreInput({
   disabled?: boolean;
   ariaLabel: string;
 }) {
-  // Use type="text" + inputMode="numeric" to avoid iOS Safari number-input quirks
-  // while still showing the numeric keyboard on mobile.
+  // Local draft state avoids React controlled-input / iOS input-method conflicts.
+  // We render what the user is typing; we only call onChange when the value is valid.
+  const [draft, setDraft] = useState<string>(value === null ? "" : String(value));
+
+  // Keep draft in sync when the value is reset externally (e.g., loaded from Firestore).
+  useEffect(() => {
+    setDraft(value === null ? "" : String(value));
+  }, [value]);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value.replace(/[^0-9]/g, "").slice(0, 2);
+    setDraft(raw);
+    if (raw === "") { onChange(null); return; }
+    const n = parseInt(raw, 10);
+    if (!isNaN(n)) onChange(Math.min(30, n));
+  }
+
   return (
     <input
       type="text"
       inputMode="numeric"
       pattern="[0-9]*"
-      maxLength={2}
+      autoComplete="off"
       aria-label={ariaLabel}
       disabled={disabled}
-      value={value === null ? "" : String(value)}
-      onChange={(e) => {
-        const raw = e.target.value.replace(/[^0-9]/g, "");
-        if (raw === "") { onChange(null); return; }
-        const n = Math.min(30, parseInt(raw, 10));
-        onChange(isNaN(n) ? null : n);
-      }}
-      className="h-11 w-12 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] text-center text-lg font-bold outline-none focus:border-[var(--accent-2)] disabled:opacity-60"
+      value={draft}
+      onChange={handleChange}
+      onFocus={(e) => e.target.select()}
+      // font-size ≥ 16px prevents iOS Safari from zooming the page on focus
+      style={{ fontSize: "1.125rem" }}
+      className="h-11 w-12 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] text-center font-bold outline-none focus:border-[var(--accent-2)] disabled:opacity-60"
     />
   );
 }
