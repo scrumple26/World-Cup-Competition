@@ -219,6 +219,8 @@ export function TeamProfileClient({ uid }: { uid: string }) {
         </div>
       </div>
 
+      {isSelf && <ReportIssue user={p} />}
+
       {isSelf && (
         <section className="card p-4">
           <h2 className="mb-3 font-semibold">Preferences</h2>
@@ -354,6 +356,81 @@ export function TeamProfileClient({ uid }: { uid: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ReportIssue({ user: u }: { user: UserProfile }) {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!message.trim()) return;
+    setStatus("sending");
+    try {
+      const { getClientAuth } = await import("@/lib/firebase/client");
+      const auth = getClientAuth();
+      const token = await auth?.currentUser?.getIdToken();
+      if (!token) throw new Error("Not signed in");
+      const res = await fetch("/api/report-issue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          message,
+          name: `${u.firstName} ${u.lastName}`,
+          teamName: u.teamName,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setStatus("sent");
+      setMessage("");
+      setTimeout(() => { setOpen(false); setStatus("idle"); }, 2500);
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <section className="card p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">Report an issue</h2>
+          <p className="text-xs text-[var(--muted)]">Bug, scoring error, or anything wrong</p>
+        </div>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="btn-ghost px-3 py-1.5 text-xs"
+        >
+          {open ? "Cancel" : "Report"}
+        </button>
+      </div>
+
+      {open && (
+        <form onSubmit={submit} className="mt-3 space-y-3">
+          <textarea
+            className="input min-h-[100px] resize-y text-sm"
+            placeholder="Describe the issue…"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            required
+          />
+          {status === "error" && (
+            <p className="text-xs text-red-400">Failed to send — try again.</p>
+          )}
+          {status === "sent" && (
+            <p className="text-xs text-green-400">✓ Report sent to the admin.</p>
+          )}
+          <button
+            type="submit"
+            className="btn-primary w-full"
+            disabled={status === "sending" || status === "sent"}
+          >
+            {status === "sending" ? "Sending…" : status === "sent" ? "Sent!" : "Send report"}
+          </button>
+        </form>
+      )}
+    </section>
   );
 }
 
