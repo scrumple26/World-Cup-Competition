@@ -33,7 +33,6 @@ export function PredictionsClient({
     lockIn,
     isUserLocked,
     locking,
-    pendingCount,
   } = usePredictions(targetUid, groups);
 
   const [mode, setMode] = useState<Mode>("group");
@@ -53,8 +52,7 @@ export function PredictionsClient({
   }
 
   const totalMatches = data?.fixtures.length ?? 0;
-  const savedCount = Object.keys(matches).length - pendingCount;
-  const isAdmin = !!actAs; // Admin mode — preserve auto-save behaviour
+  const isAdmin = !!actAs;
 
   async function handleLockIn() {
     setLockError(null);
@@ -81,14 +79,6 @@ export function PredictionsClient({
           <span className="ml-2 text-[var(--muted)]">
             Your picks are submitted. Scores lock individually at each kickoff.
           </span>
-        </div>
-      )}
-
-      {/* Pending picks banner */}
-      {!isUserLocked && !isAdmin && pendingCount > 0 && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-300">
-          <span className="font-semibold">{pendingCount} unsaved pick{pendingCount !== 1 ? "s" : ""}</span>
-          <span className="ml-2 opacity-80">— scroll down and hit <b>Lock In</b> to submit.</span>
         </div>
       )}
 
@@ -124,7 +114,7 @@ export function PredictionsClient({
             <div>
               <h1 className="text-2xl font-bold">Group Stage Predictions</h1>
               <p className="text-sm text-[var(--muted)]">
-                {savedCount} saved · {pendingCount > 0 ? `${pendingCount} pending · ` : ""}{totalMatches} total
+                {Object.keys(matches).length}/{totalMatches} entered · auto-saved
               </p>
             </div>
             <div className="flex rounded-lg border border-[var(--border)] p-1">
@@ -216,11 +206,10 @@ export function PredictionsClient({
               ) : (
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="font-semibold">Ready to submit?</div>
+                    <div className="font-semibold">Ready to finalise?</div>
                     <div className="text-sm text-[var(--muted)]">
-                      {pendingCount > 0
-                        ? `You have ${pendingCount} unsaved pick${pendingCount !== 1 ? "s" : ""}. Lock in to submit everything.`
-                        : "Lock in your picks to finalise your predictions."}
+                      Your picks auto-save as you enter them — you can leave and come back any time.
+                      When you&apos;re happy with everything, lock in to prevent further changes.
                     </div>
                   </div>
                   <button
