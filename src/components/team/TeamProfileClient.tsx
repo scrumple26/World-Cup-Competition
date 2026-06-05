@@ -34,6 +34,7 @@ export function TeamProfileClient({ uid }: { uid: string }) {
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editFirst, setEditFirst] = useState("");
   const [editLast, setEditLast] = useState("");
@@ -135,16 +136,32 @@ export function TeamProfileClient({ uid }: { uid: string }) {
       <div className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4">
-            {isSelf ? (
+            {/* Logo — click to enlarge; self gets a change link too */}
+            {effectiveLogoUrl ? (
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setLightboxOpen(true)}
+                  className="h-[72px] w-[72px] overflow-hidden rounded-full border border-[var(--border)] transition hover:opacity-80"
+                  title="Click to enlarge"
+                >
+                  <img src={effectiveLogoUrl} alt="Team logo" className="h-full w-full object-cover" />
+                </button>
+                {isSelf && (
+                  <LogoUpload
+                    onFilePicked={handleLogoPick}
+                    uploading={logoUploading}
+                    triggerOnly
+                  />
+                )}
+              </div>
+            ) : isSelf ? (
               <LogoUpload
-                currentUrl={effectiveLogoUrl}
                 onFilePicked={handleLogoPick}
                 uploading={logoUploading}
                 size={72}
                 showLabel={false}
               />
-            ) : effectiveLogoUrl ? (
-              <img src={effectiveLogoUrl} alt="Team logo" className="h-[72px] w-[72px] rounded-full object-cover border border-[var(--border)]" />
             ) : null}
             <div className="min-w-0">
               {isSelf && editing ? (
@@ -295,6 +312,28 @@ export function TeamProfileClient({ uid }: { uid: string }) {
           </div>
         )}
       </section>
+
+      {/* Lightbox */}
+      {lightboxOpen && effectiveLogoUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={effectiveLogoUrl}
+              alt="Team logo"
+              className="max-h-[80vh] max-w-[80vw] rounded-2xl object-contain shadow-2xl"
+            />
+            <button
+              onClick={() => setLightboxOpen(false)}
+              className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-elev)] text-[var(--fg)] shadow hover:bg-[var(--bg-card)]"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

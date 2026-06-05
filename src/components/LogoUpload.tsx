@@ -9,6 +9,8 @@ interface Props {
   size?: number;
   showLabel?: boolean;
   uploading?: boolean;
+  /** Renders as a plain text link instead of a circle button. */
+  triggerOnly?: boolean;
 }
 
 /** Center-crop + resize to maxPx × maxPx JPEG and return a File. */
@@ -46,6 +48,7 @@ export function LogoUpload({
   size = 64,
   showLabel = true,
   uploading = false,
+  triggerOnly = false,
 }: Props) {
   const [preview, setPreview] = useState<string | null>(currentUrl ?? null);
   const [compressing, setCompressing] = useState(false);
@@ -66,6 +69,23 @@ export function LogoUpload({
   }
 
   const busy = uploading || compressing;
+
+  // Text-link mode — just a "Change logo" trigger with hidden input
+  if (triggerOnly) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="text-xs text-[var(--muted)] hover:text-[var(--fg)] transition disabled:opacity-60"
+        >
+          {busy ? "Uploading…" : "Change logo"}
+        </button>
+        <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handlePick} />
+      </>
+    );
+  }
 
   return (
     <div className="flex items-center gap-3">

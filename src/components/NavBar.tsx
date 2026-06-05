@@ -51,10 +51,25 @@ export function NavBar() {
         <div className="flex items-center gap-3">
           <Link
             href={`/team/${user?.uid}`}
-            className="text-right text-sm leading-tight hover:underline"
+            className="flex items-center gap-2 hover:opacity-90 transition"
           >
-            <div className="font-semibold">{user?.teamName}</div>
-            <div className="text-xs text-[var(--muted)]">Group {user?.friendGroup}</div>
+            {user?.logoUrl ? (
+              <img
+                src={user.logoUrl}
+                alt="Team logo"
+                width={32}
+                height={32}
+                className="h-8 w-8 rounded-full object-cover border border-[var(--border)]"
+              />
+            ) : (
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border)] text-xs font-bold text-[var(--muted)]">
+                {user?.teamName?.charAt(0).toUpperCase()}
+              </span>
+            )}
+            <div className="text-right text-sm leading-tight">
+              <div className="font-semibold">{user?.teamName}</div>
+              <div className="text-xs text-[var(--muted)]">Group {user?.friendGroup}</div>
+            </div>
           </Link>
           <button onClick={() => logOut()} className="btn-ghost px-3 py-1.5 text-xs">
             Sign out
