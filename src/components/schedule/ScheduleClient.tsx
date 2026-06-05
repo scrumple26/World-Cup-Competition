@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWcData } from "@/lib/useWcData";
@@ -164,7 +164,7 @@ export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean })
                 onClick={() => setFilter(val)}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
                   filter === val
-                    ? "bg-[var(--accent)] text-[#06210f]"
+                    ? "bg-[var(--accent)] text-white"
                     : "text-[var(--muted)] hover:text-[var(--fg)]"
                 }`}
               >

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWcData } from "@/lib/useWcData";
@@ -125,7 +125,7 @@ export function WorldCupClient() {
                 onClick={() => setTab(t.id)}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
                   tab === t.id
-                    ? "bg-[var(--accent)] text-[#06210f]"
+                    ? "bg-[var(--accent)] text-white"
                     : "text-[var(--muted)] hover:text-[var(--fg)]"
                 }`}
               >

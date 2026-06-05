@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -35,7 +35,7 @@ export function NavBar() {
                 href={t.href}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                   active
-                    ? "bg-[var(--accent)] text-[#06210f]"
+                    ? "bg-[var(--accent)] text-white"
                     : "text-[var(--muted)] hover:bg-[var(--bg-card)] hover:text-[var(--fg)]"
                 }`}
               >

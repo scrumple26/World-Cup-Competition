@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -68,7 +68,7 @@ export function PredictionsClient({
             key={s}
             onClick={() => setStage(s)}
             className={`flex-1 rounded-md px-4 py-1.5 text-sm font-semibold transition sm:flex-none ${
-              stage === s ? "bg-[var(--accent-2)] text-[#06210f]" : "text-[var(--muted)]"
+              stage === s ? "bg-[var(--accent-2)] text-white" : "text-[var(--muted)]"
             }`}
           >
             {label}
@@ -103,7 +103,7 @@ export function PredictionsClient({
               onClick={() => setMode(m)}
               className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
                 mode === m
-                  ? "bg-[var(--accent)] text-[#06210f]"
+                  ? "bg-[var(--accent)] text-white"
                   : "text-[var(--muted)]"
               }`}
             >

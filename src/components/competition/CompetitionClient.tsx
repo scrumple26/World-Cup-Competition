@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { GroupsClient } from "@/components/groups/GroupsClient";
@@ -27,7 +27,7 @@ export function CompetitionClient() {
               onClick={() => setTab(t.id)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
                 tab === t.id
-                  ? "bg-[var(--accent)] text-[#06210f]"
+                  ? "bg-[var(--accent)] text-white"
                   : "text-[var(--muted)] hover:text-[var(--fg)]"
               }`}
             >

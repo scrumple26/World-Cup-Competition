@@ -3,22 +3,38 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0b1220;
-  --bg-elev: #131c2e;
-  --bg-card: #182338;
-  --border: #243049;
-  --fg: #e8eefb;
-  --muted: #93a1bd;
-  --accent: #22c55e;
-  --accent-2: #38bdf8;
-  --gold: #f5c451;
+  /* ── Base surfaces ── */
+  --bg:      #05111f;   /* Deep stadium navy */
+  --bg-elev: #091929;   /* Elevated panels */
+  --bg-card: #0d2040;   /* Card backgrounds */
+  --border:  #1a3560;   /* Subtle borders */
+
+  /* ── Text ── */
+  --fg:    #eef3fc;     /* Primary text — cool white */
+  --muted: #7a90b8;     /* Muted / secondary text */
+
+  /* ── WC 2026 brand accent colours ── */
+  --accent:   #e31837;  /* FIFA / WC Red — primary CTA, active states */
+  --accent-2: #4ab3ff;  /* Electric blue — links, secondary highlights */
+  --gold:     #e6c23a;  /* Trophy gold */
 }
 
-html,
+/* Subtle field-line texture on the root background */
 body {
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent,
+    transparent 79px,
+    rgba(255,255,255,0.015) 79px,
+    rgba(255,255,255,0.015) 80px
+  );
   color: var(--fg);
   font-family: var(--font-geist-sans), system-ui, Arial, sans-serif;
+}
+
+html {
+  background: var(--bg);
 }
 
 @layer components {
@@ -28,8 +44,9 @@ body {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
   }
+  /* WC Red button with white text */
   .btn-primary {
-    @apply btn bg-[var(--accent)] text-[#06210f] hover:brightness-110;
+    @apply btn bg-[var(--accent)] text-white hover:brightness-110;
   }
   .btn-ghost {
     @apply btn border border-[var(--border)] text-[var(--fg)] hover:bg-[var(--bg-elev)];

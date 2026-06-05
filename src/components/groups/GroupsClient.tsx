@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -37,7 +37,7 @@ export function GroupsClient() {
               key={t}
               onClick={() => setTab(t)}
               className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
-                tab === t ? "bg-[var(--accent)] text-[#06210f]" : "text-[var(--muted)]"
+                tab === t ? "bg-[var(--accent)] text-white" : "text-[var(--muted)]"
               }`}
             >
               {label}

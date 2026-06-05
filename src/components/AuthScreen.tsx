@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -71,7 +71,7 @@ export function AuthScreen() {
                 onClick={() => { setMode(m); setShowReset(false); setResetSent(false); setError(null); }}
                 className={`flex-1 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
                   mode === m
-                    ? "bg-[var(--accent)] text-[#06210f]"
+                    ? "bg-[var(--accent)] text-white"
                     : "text-[var(--muted)]"
                 }`}
               >
