@@ -15,7 +15,9 @@ const TABS = [
 
 interface PredStatus {
   locked: boolean;
-  count: number;
+  matchCount: number;   // match scores entered
+  groupCount: number;   // group finish orders set (out of 12)
+  thirdCount: number;   // 3rd-place picks selected (out of 8)
 }
 
 export function NavBar() {
@@ -30,8 +32,10 @@ export function NavBar() {
     fetch(`/api/predictions?uid=${user.uid}`)
       .then(r => r.json())
       .then(d => setPredStatus({
-        locked: !!d.userLocked,
-        count: Object.keys(d.matches ?? {}).length,
+        locked:     !!d.userLocked,
+        matchCount: Object.keys(d.matches ?? {}).length,
+        groupCount: Object.keys(d.groups  ?? {}).length,
+        thirdCount: (d.third?.advancing ?? []).length,
       }))
       .catch(() => {});
   }, [user?.uid, pathname]);
@@ -41,11 +45,16 @@ export function NavBar() {
 
   // Show badge when user hasn't locked in yet
   const showBadge = predStatus !== null && !predStatus.locked;
-  const tooltipText = predStatus
-    ? predStatus.count === 0
-      ? "You haven't entered any predictions yet. Head to Predictions, fill in your scores and group finishes, then hit Lock In to submit."
-      : `You have ${predStatus.count} prediction${predStatus.count !== 1 ? "s" : ""} but haven't locked them in. Go to Predictions → scroll to the bottom → Lock In Predictions.`
-    : "";
+
+  const tooltipLines = predStatus && !predStatus.locked ? [
+    `📊 Match scores: ${predStatus.matchCount}/72`,
+    `📋 Group finishes: ${predStatus.groupCount}/12`,
+    `🔢 3rd-place picks: ${predStatus.thirdCount}/8`,
+    "",
+    predStatus.matchCount === 0
+      ? "Head to Predictions to start entering your picks."
+      : "Go to Predictions → scroll to the bottom → Lock In Predictions to submit.",
+  ] : [];
 
   return (
     <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--bg-elev)]/95 backdrop-blur">
@@ -82,8 +91,18 @@ export function NavBar() {
                 </Link>
                 {/* Tooltip */}
                 <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] p-3 text-xs text-[var(--fg)] shadow-xl opacity-0 transition-opacity group-hover:opacity-100">
-                  <p className="font-semibold text-[var(--accent)] mb-1">Predictions not locked in</p>
-                  <p className="text-[var(--muted)] leading-relaxed">{tooltipText}</p>
+                  <p className="font-semibold text-[var(--accent)] mb-2">Predictions not locked in</p>
+                  <div className="space-y-1">
+                    {tooltipLines.map((line, i) =>
+                      line === "" ? (
+                        <div key={i} className="border-t border-[var(--border)] my-1" />
+                      ) : (
+                        <p key={i} className={line.startsWith("Go to") || line.startsWith("Head to") ? "text-[var(--muted)] leading-relaxed mt-1" : "font-medium"}>
+                          {line}
+                        </p>
+                      )
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
