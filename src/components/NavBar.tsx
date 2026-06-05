@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
 
@@ -11,12 +12,39 @@ const TABS = [
   { href: "/rules",        label: "Rules"         },
 ];
 
+interface PredStatus {
+  locked: boolean;
+  count: number;
+}
+
 export function NavBar() {
   const { user, logOut } = useAuth();
   const pathname = usePathname();
+  const [predStatus, setPredStatus] = useState<PredStatus | null>(null);
+
+  // Fetch prediction status once when user loads (and refresh on path change so
+  // it updates after the user visits the Predictions page).
+  useEffect(() => {
+    if (!user) return;
+    fetch(`/api/predictions?uid=${user.uid}`)
+      .then(r => r.json())
+      .then(d => setPredStatus({
+        locked: !!d.userLocked,
+        count: Object.keys(d.matches ?? {}).length,
+      }))
+      .catch(() => {});
+  }, [user?.uid, pathname]);
 
   const tabs = [...TABS];
   if (user?.isAdmin) tabs.push({ href: "/admin", label: "Admin" });
+
+  // Show badge when user hasn't locked in yet
+  const showBadge = predStatus !== null && !predStatus.locked;
+  const tooltipText = predStatus
+    ? predStatus.count === 0
+      ? "You haven't entered any predictions yet. Head to Predictions, fill in your scores and group finishes, then hit Lock In to submit."
+      : `You have ${predStatus.count} prediction${predStatus.count !== 1 ? "s" : ""} but haven't locked them in. Go to Predictions → scroll to the bottom → Lock In Predictions.`
+    : "";
 
   return (
     <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--bg-elev)]/95 backdrop-blur">
@@ -29,7 +57,35 @@ export function NavBar() {
         <nav className="flex flex-1 flex-wrap items-center gap-1">
           {tabs.map((t) => {
             const active = pathname === t.href || pathname.startsWith(t.href + "/");
-            return (
+            const isPredTab = t.href === "/predictions";
+
+            return isPredTab && showBadge ? (
+              // Predictions tab with badge + tooltip
+              <div key={t.href} className="group relative">
+                <Link
+                  href={t.href}
+                  className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                    active
+                      ? "bg-[var(--accent)] text-white"
+                      : "text-[var(--muted)] hover:bg-[var(--bg-card)] hover:text-[var(--fg)]"
+                  }`}
+                >
+                  {t.label}
+                  <span
+                    className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
+                      active ? "bg-white/20 text-white" : "bg-[var(--accent)] text-white"
+                    }`}
+                  >
+                    !
+                  </span>
+                </Link>
+                {/* Tooltip */}
+                <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] p-3 text-xs text-[var(--fg)] shadow-xl opacity-0 transition-opacity group-hover:opacity-100">
+                  <p className="font-semibold text-[var(--accent)] mb-1">Predictions not locked in</p>
+                  <p className="text-[var(--muted)] leading-relaxed">{tooltipText}</p>
+                </div>
+              </div>
+            ) : (
               <Link
                 key={t.href}
                 href={t.href}
