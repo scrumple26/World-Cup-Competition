@@ -108,8 +108,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setUser(profile);
               setNeedsProfile(false);
             } else {
-              setUser(null);
-              setNeedsProfile(true);
+              // No Firestore profile yet. Try to auto-create from stored signup data
+              // (stored in displayName during signUp before email verification).
+              const stored = parseStoredSignupData(fbUser.displayName);
+              if (stored) {
+                const created = await createFirebaseProfile(
+                  idToken, stored.tn, stored.fn, stored.ln, stored.lu,
+                ).catch(() => null);
+                if (created) {
+                  setUser(created);
+                  setNeedsProfile(false);
+                } else {
+                  setUser(null);
+                  setNeedsProfile(true);
+                }
+              } else {
+                // Manually-created account — show profile setup screen.
+                setUser(null);
+                setNeedsProfile(true);
+              }
             }
           } catch {
             setUser(null);
@@ -158,21 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getClientAuth();
     if (!auth) throw new Error("Firebase not configured.");
     const cred = await createUserWithEmailAndPassword(auth, normEmail, password);
-
-    // Send verification email (non-fatal if it fails)
-    try {
-      const { sendEmailVerification } = await import("firebase/auth");
-      await sendEmailVerification(cred.user);
-    } catch { /* proceed anyway */ }
-
-    // Show verification screen — profile creation happens after verification.
-    setAwaitingVerification(true);
-    setUnverifiedEmail(normEmail);
-    setLoading(false);
-
-    // Upload logo + create profile in background (will be used after verification)
     const idToken = await cred.user.getIdToken();
 
+    // Upload logo first if provided (we have a valid token right now).
     let logoUrl: string | undefined;
     if (logoFile) {
       try {
@@ -187,9 +192,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch { /* proceed without logo */ }
     }
 
-    // Create profile in background so it's ready after the user verifies.
-    // Do NOT call setUser — onAuthStateChanged handles state once email is verified.
-    await createFirebaseProfile(idToken, teamName, firstName, lastName, logoUrl).catch(() => {});
+    // Store signup data in Firebase Auth displayName so onAuthStateChanged can
+    // auto-create the Firestore profile AFTER email verification.
+    // This prevents unverified accounts from appearing in the app/leaderboard.
+    try {
+      const { updateProfile } = await import("firebase/auth");
+      await updateProfile(cred.user, {
+        displayName: JSON.stringify({
+          fn: firstName.trim(),
+          ln: lastName.trim(),
+          tn: teamName.trim(),
+          ...(logoUrl ? { lu: logoUrl } : {}),
+        }),
+      });
+    } catch { /* non-fatal */ }
+
+    // Send verification email.
+    try {
+      const { sendEmailVerification } = await import("firebase/auth");
+      await sendEmailVerification(cred.user);
+    } catch { /* proceed anyway */ }
+
+    // Show verification screen — profile is created only after email is verified.
+    setAwaitingVerification(true);
+    setUnverifiedEmail(normEmail);
+    setLoading(false);
   }
 
   async function completeProfile(firstName: string, lastName: string, teamName: string, logoFile?: File | null) {
@@ -310,6 +337,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 // ---- Firebase profile helpers (used only in Firebase mode) ----
+
+/** Parse signup data that was stashed in Firebase Auth displayName before verification. */
+function parseStoredSignupData(
+  displayName: string | null,
+): { fn: string; ln: string; tn: string; lu?: string } | null {
+  if (!displayName) return null;
+  try {
+    const d = JSON.parse(displayName);
+    if (d.fn && d.ln && d.tn) return d;
+  } catch { /* not JSON */ }
+  return null;
+}
 
 async function createFirebaseProfile(
   idToken: string,

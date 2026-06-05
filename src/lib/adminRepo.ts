@@ -67,3 +67,15 @@ export async function syncNow(): Promise<AdminResult> {
   if (USE_MOCK) return { ok: true, mock: true };
   return post("/api/sync", {});
 }
+
+export async function removeUser(uid: string): Promise<AdminResult> {
+  if (USE_MOCK) return { ok: true, mock: true };
+  const token = await adminToken();
+  const res = await fetch("/api/admin/remove-user", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ uid }),
+  });
+  const data = await res.json().catch(() => ({})) as { error?: string };
+  return { ok: res.ok, error: data.error };
+}

@@ -6,7 +6,7 @@ import { useLeague } from "@/lib/useLeague";
 import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
-import { overrideResult, setUserGroup, syncNow } from "@/lib/adminRepo";
+import { overrideResult, removeUser, setUserGroup, syncNow } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 
 export function AdminClient() {
@@ -76,6 +76,31 @@ export function AdminClient() {
               className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] px-3 py-2 text-left text-sm hover:border-[var(--accent-2)]"
             >
               <span className="truncate">{u.teamName}</span>
+              <span className="text-xs text-[var(--muted)]">Grp {u.friendGroup}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Remove a player */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Remove a player</h2>
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Deletes the player from Firebase Auth, their profile, predictions, and score.
+          Use to clean up unverified or test accounts.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {league?.users.filter((u) => u.uid !== user?.uid).map((u) => (
+            <button
+              key={u.uid}
+              onClick={async () => {
+                if (!window.confirm(`Remove ${u.teamName} (${u.email})? This cannot be undone.`)) return;
+                const r = await removeUser(u.uid);
+                flash(r.ok ? `✓ Removed ${u.teamName}` : `Failed: ${r.error}`);
+              }}
+              className="flex items-center justify-between rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-left text-sm hover:border-red-500/50 hover:bg-red-500/10"
+            >
+              <span className="truncate text-red-300">{u.teamName}</span>
               <span className="text-xs text-[var(--muted)]">Grp {u.friendGroup}</span>
             </button>
           ))}
