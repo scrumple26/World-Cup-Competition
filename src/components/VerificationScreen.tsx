@@ -58,7 +58,7 @@ export function VerificationScreen({
         </p>
         <p className="text-sm text-amber-400/90">
           📬 <b>Check your spam / junk folder</b> — the email comes from{" "}
-          <b>worldcupcompetition1@gmail.com</b>. Mark it &quot;Not Spam&quot; and
+          <b>noreply@globalfootballcup.com</b>. Mark it &quot;Not Spam&quot; and
           add that address to your contacts so future emails land in your inbox.
         </p>
 

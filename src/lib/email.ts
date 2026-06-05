@@ -1,16 +1,12 @@
 import "server-only";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const FROM = '"WC 2026 Competition" <worldcupcompetition1@gmail.com>';
+const FROM = "WC 2026 Competition <noreply@globalfootballcup.com>";
 
-function getTransporter() {
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  if (!user || !pass) return null;
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: { user, pass },
-  });
+function getResend(): Resend | null {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return null;
+  return new Resend(key);
 }
 
 function baseTemplate(title: string, bodyHtml: string): string {
@@ -43,7 +39,8 @@ function baseTemplate(title: string, bodyHtml: string): string {
       </div>
       <div class="body">${bodyHtml}</div>
       <div class="footer">
-        Sent by WC 2026 Competition. If you didn't request this, you can safely ignore it.
+        Sent by WC 2026 Competition · <a href="https://globalfootballcup.com" style="color:#4ab3ff">globalfootballcup.com</a>
+        <br/>If you didn't request this, you can safely ignore it.
       </div>
     </div>
   </div>
@@ -55,50 +52,44 @@ export async function sendVerificationEmail(
   toEmail: string,
   verificationLink: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const transporter = getTransporter();
-  if (!transporter) return { ok: false, error: "Gmail not configured" };
+  const resend = getResend();
+  if (!resend) return { ok: false, error: "Resend not configured" };
 
-  try {
-    await transporter.sendMail({
-      from: FROM,
-      to: toEmail,
-      subject: "Verify your email - WC 2026 Competition",
-      text: `WC 2026 Competition\n\nVerify your email address\n\nClick the link below to verify your email and activate your account:\n\n${verificationLink}\n\nThis link expires in 1 hour.\n\nIf you didn't sign up, ignore this email.`,
-      html: baseTemplate(
-        "Verify your email address",
-        `<p>Thanks for joining! Click the button below to verify your email and activate your account.</p>
-         <p><a href="${verificationLink}" class="btn">Verify email address</a></p>
-         <p>This link expires in <strong>1 hour</strong>.</p>`,
-      ),
-    });
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Send failed" };
-  }
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: "Verify your email - WC 2026 Competition",
+    text: `WC 2026 Competition\n\nVerify your email address\n\nClick the link below to verify your email and activate your account:\n\n${verificationLink}\n\nThis link expires in 1 hour.\n\nIf you didn't sign up, ignore this email.\n\nglobalfootballcup.com`,
+    html: baseTemplate(
+      "Verify your email address",
+      `<p>Thanks for joining! Click the button below to verify your email and activate your account.</p>
+       <p><a href="${verificationLink}" class="btn">Verify email address</a></p>
+       <p>This link expires in <strong>1 hour</strong>.</p>`,
+    ),
+  });
+
+  return error ? { ok: false, error: error.message } : { ok: true };
 }
 
 export async function sendPasswordResetEmail(
   toEmail: string,
   resetLink: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const transporter = getTransporter();
-  if (!transporter) return { ok: false, error: "Gmail not configured" };
+  const resend = getResend();
+  if (!resend) return { ok: false, error: "Resend not configured" };
 
-  try {
-    await transporter.sendMail({
-      from: FROM,
-      to: toEmail,
-      subject: "Reset your password - WC 2026 Competition",
-      text: `WC 2026 Competition\n\nReset your password\n\nClick the link below to choose a new password:\n\n${resetLink}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.`,
-      html: baseTemplate(
-        "Reset your password",
-        `<p>We received a request to reset your password. Click the button below to choose a new one.</p>
-         <p><a href="${resetLink}" class="btn">Reset password</a></p>
-         <p>This link expires in <strong>1 hour</strong>. If you didn't request this, ignore this email.</p>`,
-      ),
-    });
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Send failed" };
-  }
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: "Reset your password - WC 2026 Competition",
+    text: `WC 2026 Competition\n\nReset your password\n\nClick the link below to choose a new password:\n\n${resetLink}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.\n\nglobalfootballcup.com`,
+    html: baseTemplate(
+      "Reset your password",
+      `<p>We received a request to reset your password. Click the button below to choose a new one.</p>
+       <p><a href="${resetLink}" class="btn">Reset password</a></p>
+       <p>This link expires in <strong>1 hour</strong>. If you didn't request this, ignore this email.</p>`,
+    ),
+  });
+
+  return error ? { ok: false, error: error.message } : { ok: true };
 }
