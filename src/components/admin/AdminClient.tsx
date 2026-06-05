@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
 import { useWcData } from "@/lib/useWcData";
@@ -15,6 +15,30 @@ export function AdminClient() {
   const { data: wc } = useWcData();
   const [actAs, setActAs] = useState<UserProfile | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [weeklyMsg, setWeeklyMsg] = useState("");
+  const [msgSaving, setMsgSaving] = useState(false);
+  const [predCounts, setPredCounts] = useState<Record<string, number>>({});
+
+  // Load current weekly message
+  useEffect(() => {
+    fetch("/api/config/weekly-message")
+      .then(r => r.json())
+      .then(d => setWeeklyMsg(d.text ?? ""))
+      .catch(() => {});
+  }, []);
+
+  // Load prediction counts for each player
+  useEffect(() => {
+    if (!league) return;
+    Promise.all(
+      league.users.map(u =>
+        fetch(`/api/predictions?uid=${u.uid}`)
+          .then(r => r.json())
+          .then(d => [u.uid, Object.keys(d.matches ?? {}).length] as [string, number])
+          .catch(() => [u.uid, 0] as [string, number])
+      )
+    ).then(entries => setPredCounts(Object.fromEntries(entries)));
+  }, [league]);
 
   if (!user?.isAdmin) {
     return <p className="text-[var(--muted)]">You don&apos;t have admin access.</p>;
@@ -116,6 +140,78 @@ export function AdminClient() {
         mockMode={mockMode}
         onDone={flash}
       />
+
+      {/* Prediction completion status */}
+      <section className="card p-4">
+        <h2 className="mb-3 font-semibold">Prediction status</h2>
+        <p className="mb-3 text-xs text-[var(--muted)]">Number of match predictions each player has submitted.</p>
+        <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+          <table className="w-full text-sm">
+            <thead className="bg-[var(--bg-elev)] text-xs uppercase text-[var(--muted)]">
+              <tr>
+                <th className="px-3 py-2 text-left">Player</th>
+                <th className="px-3 py-2 text-left">Group</th>
+                <th className="px-3 py-2 text-right">Predictions</th>
+                <th className="px-3 py-2 text-right">Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(league?.users ?? [])
+                .slice()
+                .sort((a, b) => (predCounts[b.uid] ?? 0) - (predCounts[a.uid] ?? 0))
+                .map(u => {
+                  const count = predCounts[u.uid];
+                  const pts = league?.scores[u.uid]?.total ?? 0;
+                  const hasAny = count > 0;
+                  return (
+                    <tr key={u.uid} className="border-t border-[var(--border)]">
+                      <td className="px-3 py-2 font-medium">{u.teamName}</td>
+                      <td className="px-3 py-2 text-[var(--muted)]">{u.friendGroup}</td>
+                      <td className="px-3 py-2 text-right">
+                        <span className={hasAny ? "text-green-400 font-semibold" : "text-[var(--muted)]"}>
+                          {count === undefined ? "…" : count === 0 ? "None" : `${count} picks`}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold">{pts}</td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Weekly message */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Weekly message</h2>
+        <p className="mb-3 text-xs text-[var(--muted)]">Shows on everyone&apos;s dashboard. Leave blank to hide.</p>
+        <textarea
+          className="input min-h-[80px] resize-y text-sm"
+          placeholder="e.g. Great week everyone! Don't forget to lock in your Round 2 predictions by Thursday."
+          value={weeklyMsg}
+          onChange={e => setWeeklyMsg(e.target.value)}
+        />
+        <button
+          className="btn-primary mt-2 px-4 py-2 text-sm"
+          disabled={msgSaving}
+          onClick={async () => {
+            setMsgSaving(true);
+            try {
+              const token = await (await import("@/lib/firebase/client")).getClientAuth()?.currentUser?.getIdToken();
+              await fetch("/api/config/weekly-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ text: weeklyMsg, uid: user?.uid }),
+              });
+              flash(weeklyMsg.trim() ? "✓ Message published" : "✓ Message cleared");
+            } finally {
+              setMsgSaving(false);
+            }
+          }}
+        >
+          {msgSaving ? "Saving…" : "Publish message"}
+        </button>
+      </section>
 
       {/* Group management */}
       <section className="card p-4">
