@@ -22,7 +22,6 @@ export function LeaderboardClient() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">Leaderboard</h1>
       <div className="card p-4">
         <StandingsTable rows={rows} highlightUid={user?.uid} showGroup />
       </div>

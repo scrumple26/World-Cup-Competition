@@ -34,7 +34,7 @@ export function BracketClient() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">Knockout Bracket</h1>
+        <h2 className="text-lg font-bold">Knockout Bracket</h2>
         <span
           className={`chip ${started ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "bg-amber-500/15 text-amber-300"}`}
         >
