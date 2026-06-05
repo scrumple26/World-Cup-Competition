@@ -1,12 +1,16 @@
 import "server-only";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const FROM = "WC Competition <onboarding@resend.dev>";
+const FROM = '"WC 2026 Competition" <worldcupcompetition1@gmail.com>';
 
-function getResend(): Resend | null {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return null;
-  return new Resend(key);
+function getTransporter() {
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) return null;
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
 }
 
 function baseTemplate(title: string, bodyHtml: string): string {
@@ -21,30 +25,25 @@ function baseTemplate(title: string, bodyHtml: string): string {
     .card { background:#0d2040; border:1px solid #1a3560; border-radius:12px; overflow:hidden; }
     .header { background:#e31837; padding:24px 32px; text-align:center; }
     .header h1 { margin:0; font-size:20px; font-weight:700; color:#fff; letter-spacing:-.3px; }
-    .header p { margin:4px 0 0; font-size:13px; color:rgba(255,255,255,.8); }
+    .header p  { margin:4px 0 0; font-size:13px; color:rgba(255,255,255,.8); }
     .body { padding:32px; }
     .body p { margin:0 0 16px; font-size:15px; line-height:1.6; color:#c8d4ee; }
-    .btn { display:inline-block; background:#e31837; color:#fff !important; text-decoration:none; padding:14px 28px; border-radius:8px; font-weight:700; font-size:15px; margin:8px 0 20px; }
+    .btn { display:inline-block; background:#e31837; color:#fff !important; text-decoration:none;
+           padding:14px 28px; border-radius:8px; font-weight:700; font-size:15px; margin:8px 0 20px; }
     .footer { padding:20px 32px; border-top:1px solid #1a3560; font-size:12px; color:#7a90b8; }
-    .footer a { color:#4ab3ff; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div style="text-align:center;padding:20px 0 12px">
-      <span style="font-size:32px">🏆</span>
-    </div>
+    <div style="text-align:center;padding:20px 0 12px"><span style="font-size:32px">🏆</span></div>
     <div class="card">
       <div class="header">
         <h1>World Cup 2026 Competition</h1>
         <p>${title}</p>
       </div>
-      <div class="body">
-        ${bodyHtml}
-      </div>
+      <div class="body">${bodyHtml}</div>
       <div class="footer">
-        This email was sent by the WC 2026 Competition app.
-        If you didn't request this, you can safely ignore it.
+        Sent by WC 2026 Competition. If you didn't request this, you can safely ignore it.
       </div>
     </div>
   </div>
@@ -56,46 +55,50 @@ export async function sendVerificationEmail(
   toEmail: string,
   verificationLink: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const resend = getResend();
-  if (!resend) return { ok: false, error: "RESEND_API_KEY not configured" };
+  const transporter = getTransporter();
+  if (!transporter) return { ok: false, error: "Gmail not configured" };
 
-  const html = baseTemplate(
-    "Verify your email address",
-    `<p>Thanks for joining! Click the button below to verify your email address and activate your account.</p>
-     <p><a href="${verificationLink}" class="btn">Verify email address</a></p>
-     <p>This link expires in <strong>1 hour</strong>. If it expires, sign in to request a new one.</p>`,
-  );
-
-  const { error } = await resend.emails.send({
-    from: FROM,
-    to: toEmail,
-    subject: "Verify your email — WC 2026 Competition",
-    html,
-  });
-
-  return error ? { ok: false, error: error.message } : { ok: true };
+  try {
+    await transporter.sendMail({
+      from: FROM,
+      to: toEmail,
+      subject: "Verify your email - WC 2026 Competition",
+      text: `WC 2026 Competition\n\nVerify your email address\n\nClick the link below to verify your email and activate your account:\n\n${verificationLink}\n\nThis link expires in 1 hour.\n\nIf you didn't sign up, ignore this email.`,
+      html: baseTemplate(
+        "Verify your email address",
+        `<p>Thanks for joining! Click the button below to verify your email and activate your account.</p>
+         <p><a href="${verificationLink}" class="btn">Verify email address</a></p>
+         <p>This link expires in <strong>1 hour</strong>.</p>`,
+      ),
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Send failed" };
+  }
 }
 
 export async function sendPasswordResetEmail(
   toEmail: string,
   resetLink: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const resend = getResend();
-  if (!resend) return { ok: false, error: "RESEND_API_KEY not configured" };
+  const transporter = getTransporter();
+  if (!transporter) return { ok: false, error: "Gmail not configured" };
 
-  const html = baseTemplate(
-    "Reset your password",
-    `<p>We received a request to reset your password. Click the button below to choose a new one.</p>
-     <p><a href="${resetLink}" class="btn">Reset password</a></p>
-     <p>This link expires in <strong>1 hour</strong>. If you didn't request a password reset, you can ignore this email.</p>`,
-  );
-
-  const { error } = await resend.emails.send({
-    from: FROM,
-    to: toEmail,
-    subject: "Reset your password — WC 2026 Competition",
-    html,
-  });
-
-  return error ? { ok: false, error: error.message } : { ok: true };
+  try {
+    await transporter.sendMail({
+      from: FROM,
+      to: toEmail,
+      subject: "Reset your password - WC 2026 Competition",
+      text: `WC 2026 Competition\n\nReset your password\n\nClick the link below to choose a new password:\n\n${resetLink}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.`,
+      html: baseTemplate(
+        "Reset your password",
+        `<p>We received a request to reset your password. Click the button below to choose a new one.</p>
+         <p><a href="${resetLink}" class="btn">Reset password</a></p>
+         <p>This link expires in <strong>1 hour</strong>. If you didn't request this, ignore this email.</p>`,
+      ),
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Send failed" };
+  }
 }

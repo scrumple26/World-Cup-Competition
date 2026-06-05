@@ -54,7 +54,12 @@ export function VerificationScreen({
         <h1 className="text-2xl font-bold">Check your email</h1>
         <p className="text-sm text-[var(--muted)]">
           We sent a verification link to <b className="text-[var(--fg)]">{email}</b>.
-          Click the link to activate your account — this page will update automatically.
+          Click the link to activate your account — this page updates automatically.
+        </p>
+        <p className="text-sm text-amber-400/90">
+          📬 <b>Check your spam / junk folder</b> — the email comes from{" "}
+          <b>worldcupcompetition1@gmail.com</b>. Mark it &quot;Not Spam&quot; and
+          add that address to your contacts so future emails land in your inbox.
         </p>
 
         <div className="card p-5 space-y-3">
