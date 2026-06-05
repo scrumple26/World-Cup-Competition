@@ -68,6 +68,7 @@ export default function RulesPage() {
           <li>You earn points by predicting <b>real World Cup 2026 matches</b>.</li>
           <li>The <b>top 2 point-getters in each group</b> (8 total) advance to the knockout.</li>
           <li>Knockout seeds 1–8 are set by group-stage points; matchups are 1v8, 2v7, 3v6, 4v5.</li>
+          <li>Tiebreakers (group stage &amp; seeding): points → perfect scores → perfect groups → <b>coin flip</b>.</li>
           <li>
             In each knockout round you go head-to-head: whoever scores more points on
             that round&apos;s WC matches advances. Ties break on total points.

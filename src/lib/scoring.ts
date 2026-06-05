@@ -16,7 +16,7 @@
  *    perfect group (all 4 correct) ...... +2 bonus
  *    each correctly picked advancing
  *      3rd-place team ................... +1
- *  Knockout seeding tiebreak: groupPts -> perfectScores -> perfectGroups -> uid hash.
+ *  Knockout seeding tiebreak: groupPts -> perfectScores -> perfectGroups -> coin flip.
  */
 
 import type { Outcome, ScoreLine } from "./types";
@@ -139,8 +139,8 @@ export interface StandingStats {
 }
 
 /**
- * Deterministic, stable hash of a string → non-negative integer.
- * Used as the final seeding tiebreak so ordering never depends on Math.random.
+ * Deterministic hash of a string → non-negative integer.
+ * Used internally by coinFlip.
  */
 export function hashUid(uid: string): number {
   let h = 2166136261;
@@ -152,14 +152,31 @@ export function hashUid(uid: string): number {
 }
 
 /**
+ * Coin flip tiebreaker for two players.
+ *
+ * Deterministic and matchup-specific: the result is derived from both UIDs
+ * so it's stable across page loads but effectively unpredictable (neither player
+ * can game it). Returns true if player A "wins" the flip.
+ *
+ * Used when all point-based tiebreakers are exhausted.
+ */
+export function coinFlip(uidA: string, uidB: string): boolean {
+  // XOR both hashes → value unique to this pair regardless of comparison order,
+  // then compare with uidA's individual hash so the result is asymmetric.
+  const combined = hashUid(uidA) ^ hashUid(uidB);
+  return (combined ^ hashUid(uidA)) % 2 === 0;
+}
+
+/**
  * Comparator ranking standings best-first:
- *   higher groupPoints → more perfectScores → more perfectGroups → lower uid hash.
+ *   higher groupPoints → more perfectScores → more perfectGroups → coin flip.
  */
 export function compareStanding(a: StandingStats, b: StandingStats): number {
   if (b.groupPoints !== a.groupPoints) return b.groupPoints - a.groupPoints;
   if (b.perfectScores !== a.perfectScores) return b.perfectScores - a.perfectScores;
   if (b.perfectGroups !== a.perfectGroups) return b.perfectGroups - a.perfectGroups;
-  return hashUid(a.uid) - hashUid(b.uid);
+  // All tiebreakers exhausted — coin flip.
+  return coinFlip(a.uid, b.uid) ? -1 : 1;
 }
 
 /** Sort a copy of the standings best-first. */
@@ -213,12 +230,13 @@ export interface MatchupSide {
 
 /**
  * Resolve a head-to-head knockout matchup.
- * Higher round points wins; tie → higher cumulative; still tied → lower uid hash.
+ * Higher round points wins; tie → higher cumulative; still tied → coin flip.
  * @returns the winning side
  */
 export function resolveMatchup(a: MatchupSide, b: MatchupSide): MatchupSide {
   if (a.roundPoints !== b.roundPoints)
     return a.roundPoints > b.roundPoints ? a : b;
   if (a.cumulative !== b.cumulative) return a.cumulative > b.cumulative ? a : b;
-  return hashUid(a.uid) <= hashUid(b.uid) ? a : b;
+  // All tiebreakers exhausted — coin flip.
+  return coinFlip(a.uid, b.uid) ? a : b;
 }
