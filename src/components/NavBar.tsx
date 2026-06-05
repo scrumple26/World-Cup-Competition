@@ -29,6 +29,26 @@ export function NavBar() {
   // it updates after the user visits the Predictions page).
   useEffect(() => {
     if (!user) return;
+    // Check localStorage first — predictions are soft-saved there until Lock In
+    try {
+      const raw = localStorage.getItem(`pred_pending_${user.uid}`);
+      if (raw) {
+        const p = JSON.parse(raw) as {
+          matches?: Record<string, unknown>;
+          groups?:  Record<string, unknown>;
+          thirdPlace?: unknown[];
+        };
+        const mc = Object.keys(p.matches  ?? {}).length;
+        const gc = Object.keys(p.groups   ?? {}).length;
+        const tc = (p.thirdPlace ?? []).length;
+        if (mc > 0 || gc > 0 || tc > 0) {
+          setPredStatus({ locked: false, matchCount: mc, groupCount: gc, thirdCount: tc });
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Nothing in localStorage — check Firestore (for locked-in users)
     fetch(`/api/predictions?uid=${user.uid}`)
       .then(r => r.json())
       .then(d => setPredStatus({
