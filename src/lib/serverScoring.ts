@@ -136,6 +136,8 @@ export async function recomputeAllScores(db: Firestore): Promise<number> {
         total: s.total,
         perfectScores: s.perfectScores,
         perfectGroups: s.perfectGroups,
+        outcomesCorrect: s.outcomesCorrect,
+        outcomesTotal: s.outcomesTotal,
         history,
       };
       await ref.set(scoreDoc);

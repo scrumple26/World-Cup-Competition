@@ -3,6 +3,11 @@
 import Link from "next/link";
 import type { RankedRow } from "@/lib/league";
 
+function pct(num: number | undefined, den: number | undefined): string {
+  if (!den || den === 0) return "—";
+  return `${Math.round(((num ?? 0) / den) * 100)}%`;
+}
+
 export function StandingsTable({
   rows,
   highlightUid,
@@ -21,14 +26,18 @@ export function StandingsTable({
           <tr>
             <th className="px-3 py-2 w-10">#</th>
             <th className="px-3 py-2">Team</th>
-            {showGroup && <th className="px-3 py-2 w-16">Group</th>}
-            <th className="px-3 py-2 w-16 text-right">Pts</th>
-            <th className="px-3 py-2 w-14 text-right" title="Perfect scores">PS</th>
+            {showGroup && <th className="px-3 py-2 w-16">Grp</th>}
+            <th className="px-3 py-2 w-14 text-right">Pts</th>
+            <th className="hidden sm:table-cell px-3 py-2 w-16 text-right" title="Win/Draw/Loss accuracy">W%</th>
+            <th className="hidden sm:table-cell px-3 py-2 w-16 text-right" title="Exact score accuracy">Score%</th>
+            <th className="px-3 py-2 w-12 text-right" title="Perfect scores">PS</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => {
             const me = r.user.uid === highlightUid;
+            const winPct  = pct(r.score.outcomesCorrect, r.score.outcomesTotal);
+            const scorePct = pct(r.score.perfectScores, r.score.outcomesTotal);
             return (
               <tr
                 key={r.user.uid}
@@ -56,9 +65,9 @@ export function StandingsTable({
                   <td className="px-3 py-2 text-[var(--muted)]">{r.user.friendGroup}</td>
                 )}
                 <td className="px-3 py-2 text-right font-bold">{r.score.total}</td>
-                <td className="px-3 py-2 text-right text-[var(--muted)]">
-                  {r.score.perfectScores}
-                </td>
+                <td className="hidden sm:table-cell px-3 py-2 text-right text-[var(--muted)]">{winPct}</td>
+                <td className="hidden sm:table-cell px-3 py-2 text-right text-[var(--muted)]">{scorePct}</td>
+                <td className="px-3 py-2 text-right text-[var(--muted)]">{r.score.perfectScores}</td>
               </tr>
             );
           })}

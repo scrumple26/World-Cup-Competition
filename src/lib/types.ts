@@ -91,6 +91,9 @@ export interface ScoreDoc {
   /** Counters used for seeding tiebreaks. */
   perfectScores: number;
   perfectGroups: number;
+  /** Outcome accuracy (correct H/D/A out of total predictions made). */
+  outcomesCorrect?: number;
+  outcomesTotal?: number;
   /** Time series for the cumulative chart. */
   history: { date: string; total: number }[];
 }

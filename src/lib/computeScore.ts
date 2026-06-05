@@ -36,6 +36,8 @@ export interface UserScore {
   total: number;
   perfectScores: number;
   perfectGroups: number;
+  outcomesCorrect: number;
+  outcomesTotal: number;
 }
 
 export function computeUserScore(
@@ -46,6 +48,8 @@ export function computeUserScore(
   let knockoutPts = 0;
   let perfectScores = 0;
   let perfectGroups = 0;
+  let outcomesCorrect = 0;
+  let outcomesTotal = 0;
 
   // 1. Match results (group + knockout share the same scoring)
   for (const m of actual.matches) {
@@ -60,6 +64,8 @@ export function computeUserScore(
     if (m.isGroupStage) groupPts += b.total;
     else knockoutPts += b.total;
     if (b.perfect) perfectScores++;
+    outcomesTotal++;
+    if (b.outcome > 0) outcomesCorrect++;
   }
 
   // 2. Group finishes (only for completed groups)
@@ -82,5 +88,7 @@ export function computeUserScore(
     total: groupPts + knockoutPts,
     perfectScores,
     perfectGroups,
+    outcomesCorrect,
+    outcomesTotal,
   };
 }

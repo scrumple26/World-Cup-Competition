@@ -443,11 +443,51 @@ function PredsPanel({
   const myPred = predictions.find((p) => p.uid === currentUid);
   const canSee = isLocked || !!myPred;
 
+  // Win/draw/away split (computed from visible predictions)
+  const homeWins = predictions.filter((p) => p.home > p.away).length;
+  const draws    = predictions.filter((p) => p.home === p.away).length;
+  const awayWins = predictions.filter((p) => p.home < p.away).length;
+  const total = predictions.length;
+
   return (
     <div className="border-t border-[var(--border)] bg-[var(--bg-elev)] px-4 py-3 space-y-2">
       <div className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
         Predictions {isLocked ? "" : "· submit yours to see others'"}
       </div>
+
+      {/* Win split bar — always visible when any predictions exist */}
+      {canSee && total > 0 && (
+        <div className="space-y-1">
+          <div className="flex h-3 overflow-hidden rounded-full">
+            {homeWins > 0 && (
+              <div
+                className="bg-[var(--accent)] transition-all"
+                style={{ width: `${(homeWins / total) * 100}%` }}
+                title={`Home: ${homeWins}`}
+              />
+            )}
+            {draws > 0 && (
+              <div
+                className="bg-[var(--muted)]/50 transition-all"
+                style={{ width: `${(draws / total) * 100}%` }}
+                title={`Draw: ${draws}`}
+              />
+            )}
+            {awayWins > 0 && (
+              <div
+                className="bg-[var(--accent-2)] transition-all"
+                style={{ width: `${(awayWins / total) * 100}%` }}
+                title={`Away: ${awayWins}`}
+              />
+            )}
+          </div>
+          <div className="flex justify-between text-[10px] text-[var(--muted)]">
+            <span><span className="text-[var(--accent)] font-semibold">{homeWins}</span> home</span>
+            <span>{draws} draw</span>
+            <span><span className="text-[var(--accent-2)] font-semibold">{awayWins}</span> away</span>
+          </div>
+        </div>
+      )}
 
       {!canSee ? (
         <p className="text-xs text-[var(--muted)] italic">

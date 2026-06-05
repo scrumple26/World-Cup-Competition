@@ -41,12 +41,17 @@ function TeamSlot({
 function MatchCard({
   m,
   highlightUid,
+  onClick,
 }: {
   m: BracketMatchup;
   highlightUid?: string;
+  onClick?: () => void;
 }) {
   return (
-    <div className="w-44 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-card)]">
+    <div
+      className={`w-44 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-card)] ${onClick ? "cursor-pointer hover:border-[var(--accent-2)] transition" : ""}`}
+      onClick={onClick}
+    >
       <TeamSlot team={m.a} label={m.aLabel} isWinner={!!m.winnerUid && m.a?.uid === m.winnerUid} highlightUid={highlightUid} />
       <div className="border-t border-[var(--border)]" />
       <TeamSlot team={m.b} label={m.bLabel} isWinner={!!m.winnerUid && m.b?.uid === m.winnerUid} highlightUid={highlightUid} />
@@ -95,17 +100,18 @@ function R1Pair({
   top,
   bottom,
   highlightUid,
+  onMatchupClick,
 }: {
   top: BracketMatchup;
   bottom: BracketMatchup;
   highlightUid?: string;
+  onMatchupClick?: (m: BracketMatchup) => void;
 }) {
-  // card height ~52px, gap 8px → total pair height ~112px
   return (
     <div className="flex items-stretch">
       <div className="flex flex-col gap-2">
-        <MatchCard m={top} highlightUid={highlightUid} />
-        <MatchCard m={bottom} highlightUid={highlightUid} />
+        <MatchCard m={top} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(top) : undefined} />
+        <MatchCard m={bottom} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(bottom) : undefined} />
       </div>
       {/* Connector arms */}
       <div className="flex w-5 flex-col">
@@ -127,9 +133,11 @@ function HBridge() {
 export function BracketView({
   bracket,
   highlightUid,
+  onMatchupClick,
 }: {
   bracket: Bracket;
   highlightUid?: string;
+  onMatchupClick?: (m: BracketMatchup) => void;
 }) {
   // R1 display order (classic bracket): M1, M4 | M2, M3
   // sf[0] = W(M1) vs W(M4), sf[1] = W(M2) vs W(M3)
@@ -148,8 +156,8 @@ export function BracketView({
         {/* ---- Round 1 ---- */}
         <RoundColumn title="Round 1">
           <div className="flex flex-col gap-6">
-            <R1Pair top={r1TopPair.top} bottom={r1TopPair.bottom} highlightUid={highlightUid} />
-            <R1Pair top={r1BotPair.top} bottom={r1BotPair.bottom} highlightUid={highlightUid} />
+            <R1Pair top={r1TopPair.top} bottom={r1TopPair.bottom} highlightUid={highlightUid} onMatchupClick={onMatchupClick} />
+            <R1Pair top={r1BotPair.top} bottom={r1BotPair.bottom} highlightUid={highlightUid} onMatchupClick={onMatchupClick} />
           </div>
         </RoundColumn>
 
@@ -168,8 +176,8 @@ export function BracketView({
         {/* ---- Semis ---- */}
         <RoundColumn title="Semis">
           <div className="flex flex-col justify-around gap-6" style={{ height: "100%" }}>
-            <MatchCard m={bracket.sf[0]} highlightUid={highlightUid} />
-            <MatchCard m={bracket.sf[1]} highlightUid={highlightUid} />
+            <MatchCard m={bracket.sf[0]} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(bracket.sf[0]) : undefined} />
+            <MatchCard m={bracket.sf[1]} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(bracket.sf[1]) : undefined} />
           </div>
         </RoundColumn>
 
@@ -183,7 +191,7 @@ export function BracketView({
         {/* ---- Final ---- */}
         <RoundColumn title="Final">
           <div className="flex flex-1 items-center">
-            <MatchCard m={bracket.final} highlightUid={highlightUid} />
+            <MatchCard m={bracket.final} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(bracket.final) : undefined} />
           </div>
         </RoundColumn>
 

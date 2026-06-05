@@ -63,6 +63,42 @@ export interface ChartSeries {
 }
 
 /**
+ * Build rank-over-time series. Lower rank = better (1 = first place).
+ * Returns chart-ready data where each row is a date and each key is a teamName → rank.
+ */
+export function buildRankSeries(
+  users: UserProfile[],
+  scores: Record<string, ScoreDoc>,
+): ChartSeries {
+  // Collect all unique dates across all histories
+  const seen = new Set<string>();
+  const dateOrder: string[] = [];
+  for (const u of users) {
+    for (const h of (scores[u.uid]?.history ?? [])) {
+      if (!seen.has(h.date)) { seen.add(h.date); dateOrder.push(h.date); }
+    }
+  }
+  dateOrder.sort(); // chronological
+
+  const lastTotals: Record<string, number> = {};
+
+  const data = dateOrder.map((date) => {
+    // Update running totals
+    for (const u of users) {
+      const hit = scores[u.uid]?.history.find((h) => h.date === date);
+      if (hit) lastTotals[u.uid] = hit.total;
+    }
+    // Rank at this date
+    const sorted = [...users].sort((a, b) => (lastTotals[b.uid] ?? 0) - (lastTotals[a.uid] ?? 0));
+    const row: Record<string, string | number> = { date };
+    sorted.forEach((u, i) => { row[u.teamName] = i + 1; });
+    return row;
+  });
+
+  return { data, keys: users.map((u) => u.teamName) };
+}
+
+/**
  * Build cumulative-points-over-time chart rows from members' score histories.
  * Dates are unioned in first-seen order; missing points carry forward.
  */
