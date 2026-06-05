@@ -6,7 +6,7 @@ import { recomputeAllScores } from "@/lib/serverScoring";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300; // generous for 104-fixture sync + 16-user scoring
 
 /**
  * POST/GET /api/sync — refresh WC fixtures + standings into Firestore and
@@ -19,7 +19,6 @@ async function handle(req: NextRequest) {
   const auth = req.headers.get("authorization");
   const keyParam = req.nextUrl.searchParams.get("key");
   const secretOk = secret && (auth === `Bearer ${secret}` || keyParam === secret);
-  // Cron secret OR an admin user token may trigger a sync.
   if (!secretOk && !(await requireAdmin(req))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -32,43 +31,69 @@ async function handle(req: NextRequest) {
     );
   }
 
-  // 1. Fixtures → wcMatches (preserve manual overrides)
-  const fixtures = await getFixtures();
-  let matchWrites = 0;
-  const batchSize = 400;
-  for (let i = 0; i < fixtures.length; i += batchSize) {
-    const batch = db.batch();
-    for (const f of fixtures.slice(i, i + batchSize)) {
-      const m = toWcMatch(f);
-      const ref = db.collection("wcMatches").doc(String(m.id));
-      const snap = await ref.get();
-      if (snap.exists && (snap.data() as { manualOverride?: boolean }).manualOverride) {
-        continue; // don't clobber admin-corrected results
-      }
-      batch.set(ref, m, { merge: true });
-      matchWrites++;
+  try {
+    // 1. Fetch from API-Football — bail early if either call returns empty.
+    const [fixtures, rawStandings] = await Promise.all([
+      getFixtures(),
+      getStandings(),
+    ]);
+
+    if (!fixtures || fixtures.length === 0) {
+      return NextResponse.json(
+        { error: "API-Football returned no fixtures — aborting to protect existing data." },
+        { status: 502 },
+      );
     }
-    await batch.commit();
+
+    // 2. Pre-fetch all existing wcMatch docs in ONE read to check manualOverride,
+    //    avoiding 104 sequential reads inside the batch loop.
+    const existingSnap = await db.collection("wcMatches").get();
+    const manualOverrides = new Set<string>();
+    for (const d of existingSnap.docs) {
+      if ((d.data() as { manualOverride?: boolean }).manualOverride) {
+        manualOverrides.add(d.id);
+      }
+    }
+
+    // 3. Write fixtures → wcMatches (skip manual overrides)
+    const batchSize = 400;
+    let matchWrites = 0;
+    for (let i = 0; i < fixtures.length; i += batchSize) {
+      const batch = db.batch();
+      for (const f of fixtures.slice(i, i + batchSize)) {
+        const m = toWcMatch(f);
+        if (manualOverrides.has(String(m.id))) continue;
+        batch.set(db.collection("wcMatches").doc(String(m.id)), m, { merge: true });
+        matchWrites++;
+      }
+      await batch.commit();
+    }
+
+    // 4. Write standings → wcStandings (only if non-empty)
+    const standings = toGroupStandings(rawStandings);
+    if (standings.length > 0) {
+      const sBatch = db.batch();
+      for (const g of standings) {
+        const letter = g.group.replace("Group ", "");
+        sBatch.set(db.collection("wcStandings").doc(letter), g);
+      }
+      await sBatch.commit();
+    }
+
+    // 5. Recompute everyone's scores from the latest results
+    const scored = await recomputeAllScores(db);
+
+    return NextResponse.json({
+      ok: true,
+      matchesSynced: matchWrites,
+      groupsSynced: standings.length,
+      usersScored: scored,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown sync error";
+    console.error("[sync] failed:", msg);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
-
-  // 2. Standings → wcStandings/{letter}
-  const standings = toGroupStandings(await getStandings());
-  const sBatch = db.batch();
-  for (const g of standings) {
-    const letter = g.group.replace("Group ", "");
-    sBatch.set(db.collection("wcStandings").doc(letter), g);
-  }
-  await sBatch.commit();
-
-  // 3. Recompute scores from latest results
-  const scored = await recomputeAllScores(db);
-
-  return NextResponse.json({
-    ok: true,
-    matchesSynced: matchWrites,
-    groupsSynced: standings.length,
-    usersScored: scored,
-  });
 }
 
 export const GET = handle;

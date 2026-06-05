@@ -154,17 +154,15 @@ export function hashUid(uid: string): number {
 /**
  * Coin flip tiebreaker for two players.
  *
- * Deterministic and matchup-specific: the result is derived from both UIDs
- * so it's stable across page loads but effectively unpredictable (neither player
- * can game it). Returns true if player A "wins" the flip.
+ * Deterministic and stable: the "winner" is whoever has the higher UID hash,
+ * giving each pair a fixed but unpredictable result that is consistent regardless
+ * of the order the two players happen to be compared.
  *
+ * Returns true if player A "wins" the flip (i.e. A should rank higher).
  * Used when all point-based tiebreakers are exhausted.
  */
 export function coinFlip(uidA: string, uidB: string): boolean {
-  // XOR both hashes → value unique to this pair regardless of comparison order,
-  // then compare with uidA's individual hash so the result is asymmetric.
-  const combined = hashUid(uidA) ^ hashUid(uidB);
-  return (combined ^ hashUid(uidA)) % 2 === 0;
+  return hashUid(uidA) > hashUid(uidB);
 }
 
 /**

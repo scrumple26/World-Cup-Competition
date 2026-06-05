@@ -62,12 +62,17 @@ export async function saveMatchPrediction(
   const { getClientDb } = await import("./firebase/client");
   const { doc, setDoc } = await import("firebase/firestore");
   const db = getClientDb();
-  if (!db) return;
-  await setDoc(
-    doc(db, "predictions", uid, "matches", String(pred.fixtureId)),
-    pred,
-    { merge: true },
-  );
+  if (!db) throw new Error("Firestore not available — prediction not saved.");
+  try {
+    await setDoc(
+      doc(db, "predictions", uid, "matches", String(pred.fixtureId)),
+      pred,
+      { merge: true },
+    );
+  } catch (err) {
+    console.error("[saveMatchPrediction] Firestore write failed:", err);
+    throw new Error("Failed to save prediction. Please try again.");
+  }
 }
 
 export async function loadGroupPredictions(
@@ -86,9 +91,13 @@ export async function saveGroupPrediction(
   const { getClientDb } = await import("./firebase/client");
   const { doc, setDoc } = await import("firebase/firestore");
   const db = getClientDb();
-  if (!db) return;
-  // Firestore doc ids can't contain "/"; "Group A" is fine.
-  await setDoc(doc(db, "predictions", uid, "groups", pred.group), pred);
+  if (!db) throw new Error("Firestore not available — prediction not saved.");
+  try {
+    await setDoc(doc(db, "predictions", uid, "groups", pred.group), pred);
+  } catch (err) {
+    console.error("[saveGroupPrediction] Firestore write failed:", err);
+    throw new Error("Failed to save group prediction. Please try again.");
+  }
 }
 
 export async function loadThirdPlace(
@@ -107,6 +116,11 @@ export async function saveThirdPlace(
   const { getClientDb } = await import("./firebase/client");
   const { doc, setDoc } = await import("firebase/firestore");
   const db = getClientDb();
-  if (!db) return;
-  await setDoc(doc(db, "predictions", uid, "meta", "thirdPlace"), pred);
+  if (!db) throw new Error("Firestore not available — prediction not saved.");
+  try {
+    await setDoc(doc(db, "predictions", uid, "meta", "thirdPlace"), pred);
+  } catch (err) {
+    console.error("[saveThirdPlace] Firestore write failed:", err);
+    throw new Error("Failed to save third-place prediction. Please try again.");
+  }
 }

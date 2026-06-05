@@ -57,13 +57,19 @@ async function loadActual(db: Firestore): Promise<ActualData> {
   }
 
   // Third-place advancers: only once ALL 12 groups are complete.
+  // Tiebreaker order mirrors WC 2026 rules: points → GD → GF → wins.
   let thirdAdvancing: number[] | null = null;
   if (standings.length >= 12 && Object.keys(completedGroupOrders).length >= 12) {
     const thirds = standings
       .map((g) => [...g.rows].sort((a, b) => a.rank - b.rank)[2])
       .filter(Boolean);
     thirdAdvancing = thirds
-      .sort((a, b) => b.points - a.points || b.goalsDiff - a.goalsDiff)
+      .sort((a, b) =>
+        b.points - a.points ||
+        b.goalsDiff - a.goalsDiff ||
+        b.gf - a.gf ||
+        b.win - a.win,
+      )
       .slice(0, 8)
       .map((r) => r.teamId);
   }
@@ -106,32 +112,40 @@ export async function recomputeAllScores(db: Firestore): Promise<number> {
   const today = new Date().toISOString().slice(0, 10);
 
   let count = 0;
+  let errors = 0;
   for (const userDoc of usersSnap.docs) {
     const uid = userDoc.id;
-    const preds = await loadUserPredictions(db, uid);
-    const s = computeUserScore(actual, preds);
+    try {
+      const preds = await loadUserPredictions(db, uid);
+      const s = computeUserScore(actual, preds);
 
-    const ref = db.collection("scores").doc(uid);
-    const prev = (await ref.get()).data() as ScoreDoc | undefined;
-    const history = prev?.history ? [...prev.history] : [];
-    const lastIdx = history.length - 1;
-    if (lastIdx >= 0 && history[lastIdx].date === today) {
-      history[lastIdx] = { date: today, total: s.total };
-    } else {
-      history.push({ date: today, total: s.total });
+      const ref = db.collection("scores").doc(uid);
+      const prev = (await ref.get()).data() as ScoreDoc | undefined;
+      const history = prev?.history ? [...prev.history] : [];
+      const lastIdx = history.length - 1;
+      if (lastIdx >= 0 && history[lastIdx].date === today) {
+        history[lastIdx] = { date: today, total: s.total };
+      } else {
+        history.push({ date: today, total: s.total });
+      }
+
+      const scoreDoc: ScoreDoc = {
+        uid,
+        groupPts: s.groupPts,
+        knockoutPts: s.knockoutPts,
+        total: s.total,
+        perfectScores: s.perfectScores,
+        perfectGroups: s.perfectGroups,
+        history,
+      };
+      await ref.set(scoreDoc);
+      count++;
+    } catch (err) {
+      // One user's failure must not block the others.
+      console.error(`[recomputeAllScores] failed for uid=${uid}:`, err);
+      errors++;
     }
-
-    const doc: ScoreDoc = {
-      uid,
-      groupPts: s.groupPts,
-      knockoutPts: s.knockoutPts,
-      total: s.total,
-      perfectScores: s.perfectScores,
-      perfectGroups: s.perfectGroups,
-      history,
-    };
-    await ref.set(doc);
-    count++;
   }
+  if (errors > 0) console.warn(`[recomputeAllScores] ${errors} user(s) failed, ${count} succeeded`);
   return count;
 }
