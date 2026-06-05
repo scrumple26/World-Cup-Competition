@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useWcData } from "@/lib/useWcData";
 import { usePredictions } from "@/lib/usePredictions";
@@ -8,6 +8,30 @@ import { GroupSection } from "./GroupSection";
 import { ThirdPlaceSelector } from "./ThirdPlaceSelector";
 import { FlashcardMode } from "./FlashcardMode";
 import { KnockoutPredictions } from "./KnockoutPredictions";
+import type { MatchPrediction, WcMatch } from "@/lib/types";
+
+// Compute group standings from predicted scores (mirrors GroupSection logic)
+function computeGroupStandings(
+  teams: { id: number }[],
+  groupMatches: WcMatch[],
+  predictions: Record<number, MatchPrediction>,
+) {
+  const stats = new Map(teams.map(t => [t.id, { id: t.id, pts: 0, gd: 0, gf: 0 }]));
+  for (const m of groupMatches) {
+    const pred = predictions[m.id];
+    if (!pred || pred.home === null || pred.away === null) continue;
+    const h = stats.get(m.homeTeamId);
+    const a = stats.get(m.awayTeamId);
+    if (!h || !a) continue;
+    const hg = Number(pred.home), ag = Number(pred.away);
+    h.gf += hg; h.gd += hg - ag;
+    a.gf += ag; a.gd += ag - hg;
+    if (hg > ag)      { h.pts += 3; }
+    else if (hg < ag) { a.pts += 3; }
+    else              { h.pts += 1; a.pts += 1; }
+  }
+  return [...stats.values()].sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+}
 
 type Mode = "group" | "flash";
 type Stage = "group" | "knockout";
@@ -27,16 +51,40 @@ export function PredictionsClient({
     groupOrders,
     groupOverridden,
     thirdPlace,
+    thirdPlaceOverridden,
     saveStates,
     setMatch,
     setOrder,
     toggleThird,
+    setThirdPlaceAuto,
+    overrideThirdPlace,
+    resetThirdPlaceOverride,
     lockIn,
     isUserLocked,
     locking,
     lockError,
     pendingCount,
   } = usePredictions(targetUid, groups);
+
+  // Compute the best 8 third-place teams from predicted match scores
+  const autoThirdPlace = useMemo(() => {
+    if (!groups.length || !loaded) return [];
+    const thirds = groups.map(g => {
+      const standings = computeGroupStandings(g.teams, g.matches, matches);
+      const third = standings[2];
+      return third ? { ...third, groupLetter: g.letter } : null;
+    }).filter(Boolean) as Array<{ id: number; pts: number; gd: number; gf: number; groupLetter: string }>;
+
+    return thirds
+      .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
+      .slice(0, 8)
+      .map(t => t.id);
+  }, [groups, matches, loaded]);
+
+  // Auto-update third-place selection when scores change (if not manually overridden)
+  useEffect(() => {
+    if (autoThirdPlace.length > 0) setThirdPlaceAuto(autoThirdPlace);
+  }, [autoThirdPlace, setThirdPlaceAuto]);
 
   const [mode, setMode] = useState<Mode>("group");
   const [stage, setStage] = useState<Stage>(() => {
@@ -173,7 +221,11 @@ export function PredictionsClient({
                 groups={groups}
                 groupOrders={groupOrders}
                 selected={thirdPlace}
+                overridden={thirdPlaceOverridden}
+                disabled={isUserLocked}
                 onToggle={toggleThird}
+                onOverride={overrideThirdPlace}
+                onReset={() => resetThirdPlaceOverride(autoThirdPlace)}
               />
             </div>
           )}

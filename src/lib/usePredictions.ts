@@ -13,9 +13,10 @@ import type { SaveState } from "@/components/predictions/MatchPredictionCard";
 // ---- localStorage helpers ----
 
 interface PendingStore {
-  matches:    Record<number, MatchPrediction>;
-  groups:     Record<string, GroupPrediction>;
-  thirdPlace: number[];
+  matches:               Record<number, MatchPrediction>;
+  groups:                Record<string, GroupPrediction>;
+  thirdPlace:            number[];
+  thirdPlaceOverridden?: boolean;
 }
 
 function lsKey(uid: string) { return `pred_pending_${uid}`; }
@@ -53,6 +54,7 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
   const [groupOrders,setGroupOrders] = useState<Record<string, number[]>>({});
   const [groupOverridden, setGroupOverriddenState] = useState<Record<string, boolean>>({});
   const [thirdPlace, setThirdPlaceState] = useState<number[]>([]);
+  const [thirdPlaceOverridden, setThirdPlaceOverridden] = useState(false);
   const [isUserLocked, setIsUserLocked] = useState(false);
   const [locking,    setLocking]    = useState(false);
   const [loaded,     setLoaded]     = useState(false);
@@ -112,6 +114,7 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
             ? pending.thirdPlace
             : ((d.third as ThirdPlacePrediction)?.advancing ?? []);
           setThirdPlaceState(mergedThird);
+          if (pending.thirdPlaceOverridden) setThirdPlaceOverridden(true);
         }
         setLoaded(true);
       })
@@ -184,15 +187,46 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
   const toggleThird = useCallback(
     (teamId: number, max: number) => {
       if (!uid) return;
+      setThirdPlaceOverridden(true);
       setThirdPlaceState(prev => {
         let next: number[];
         if (prev.includes(teamId)) next = prev.filter(id => id !== teamId);
         else if (prev.length < max) next = [...prev, teamId];
         else return prev;
         const pending = loadPending(uid);
-        savePending(uid, { ...pending, thirdPlace: next });
+        savePending(uid, { ...pending, thirdPlace: next, thirdPlaceOverridden: true });
         return next;
       });
+    },
+    [uid],
+  );
+
+  /** Called by PredictionsClient when the auto-computed selection changes. */
+  const setThirdPlaceAuto = useCallback(
+    (ids: number[]) => {
+      if (!uid || thirdPlaceOverridden) return;
+      setThirdPlaceState(ids);
+      const pending = loadPending(uid);
+      savePending(uid, { ...pending, thirdPlace: ids, thirdPlaceOverridden: false });
+    },
+    [uid, thirdPlaceOverridden],
+  );
+
+  /** Mark third-place as manually overridden without changing the selection. */
+  const overrideThirdPlace = useCallback(() => {
+    if (!uid) return;
+    setThirdPlaceOverridden(true);
+    const pending = loadPending(uid);
+    savePending(uid, { ...pending, thirdPlaceOverridden: true });
+  }, [uid]);
+
+  const resetThirdPlaceOverride = useCallback(
+    (autoIds: number[]) => {
+      if (!uid) return;
+      setThirdPlaceOverridden(false);
+      setThirdPlaceState(autoIds);
+      const pending = loadPending(uid);
+      savePending(uid, { ...pending, thirdPlace: autoIds, thirdPlaceOverridden: false });
     },
     [uid],
   );
@@ -264,10 +298,14 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
     groupOrders,
     groupOverridden,
     thirdPlace,
+    thirdPlaceOverridden,
     saveStates,
     setMatch,
     setOrder,
     toggleThird,
+    setThirdPlaceAuto,
+    overrideThirdPlace,
+    resetThirdPlaceOverride,
     lockIn,
     isUserLocked,
     locking,
