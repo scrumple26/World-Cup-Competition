@@ -207,11 +207,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     } catch { /* non-fatal */ }
 
-    // Send verification email.
+    // Send verification email via Resend (better deliverability than Firebase default).
     try {
-      const { sendEmailVerification } = await import("firebase/auth");
-      await sendEmailVerification(cred.user);
-    } catch { /* proceed anyway */ }
+      const freshToken = await cred.user.getIdToken(true);
+      await fetch("/api/send-verification", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${freshToken}` },
+      });
+    } catch { /* non-fatal — user can resend from verification screen */ }
 
     // Show verification screen — profile is created only after email is verified.
     setAwaitingVerification(true);
@@ -247,10 +250,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function resendVerification() {
     const { getClientAuth } = await import("../firebase/client");
-    const { sendEmailVerification } = await import("firebase/auth");
     const auth = getClientAuth();
     if (!auth?.currentUser) throw new Error("Not signed in.");
-    await sendEmailVerification(auth.currentUser);
+    const token = await auth.currentUser.getIdToken();
+    const res = await fetch("/api/send-verification", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({})) as { error?: string };
+      throw new Error(error ?? "Failed to send verification email");
+    }
   }
 
   function markVerified() {

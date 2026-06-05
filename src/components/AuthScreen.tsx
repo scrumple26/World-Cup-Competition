@@ -25,11 +25,15 @@ export function AuthScreen() {
     setBusy(true);
     try {
       if (mockMode) throw new Error("Password reset isn't available in demo mode.");
-      const { getClientAuth } = await import("@/lib/firebase/client");
-      const { sendPasswordResetEmail } = await import("firebase/auth");
-      const auth = getClientAuth();
-      if (!auth) throw new Error("Firebase not configured.");
-      await sendPasswordResetEmail(auth, resetEmail.trim().toLowerCase());
+      const res = await fetch("/api/send-password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail.trim().toLowerCase() }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error ?? "Failed to send reset email");
+      }
       setResetSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
