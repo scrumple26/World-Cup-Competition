@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { ThemeToggle } from "./ThemeToggle";
 
 const TABS = [
   { href: "/predictions",  label: "Predictions"  },
@@ -124,6 +125,7 @@ export function NavBar() {
               <div className="text-xs text-[var(--muted)]">Group {user?.friendGroup}</div>
             </div>
           </Link>
+          <ThemeToggle />
           <button onClick={() => logOut()} className="btn-ghost px-3 py-1.5 text-xs">
             Sign out
           </button>

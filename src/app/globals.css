@@ -2,39 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   LIGHT MODE — default (WC 2026 official palette)
+   #3CAC3B green · #2A398D navy · #E61D25 red · #D1D4D1 gray · #474A4A dark
+   ============================================================ */
 :root {
-  /* ── Base surfaces ── */
-  --bg:      #05111f;   /* Deep stadium navy */
-  --bg-elev: #091929;   /* Elevated panels */
-  --bg-card: #0d2040;   /* Card backgrounds */
-  --border:  #1a3560;   /* Subtle borders */
-
-  /* ── Text ── */
-  --fg:    #eef3fc;     /* Primary text — cool white */
-  --muted: #7a90b8;     /* Muted / secondary text */
-
-  /* ── WC 2026 brand accent colours ── */
-  --accent:   #e31837;  /* FIFA / WC Red — primary CTA, active states */
-  --accent-2: #4ab3ff;  /* Electric blue — links, secondary highlights */
-  --gold:     #e6c23a;  /* Trophy gold */
+  --bg:      #ffffff;
+  --bg-elev: #f2f4f8;
+  --bg-card: #ffffff;
+  --border:  #D1D4D1;
+  --fg:      #474A4A;
+  --muted:   #6b7a8d;
+  --accent:  #E61D25;   /* WC Red */
+  --accent-2:#2A398D;   /* WC Navy */
+  --gold:    #c9900a;
+  --green:   #3CAC3B;   /* WC Green — success states */
 }
 
-/* Subtle field-line texture on the root background */
+/* ============================================================
+   DARK MODE — toggled via data-theme="dark" on <html>
+   ============================================================ */
+[data-theme="dark"] {
+  --bg:      #05111f;
+  --bg-elev: #091929;
+  --bg-card: #0d2040;
+  --border:  #1a3560;
+  --fg:      #eef3fc;
+  --muted:   #7a90b8;
+  --accent:  #e31837;
+  --accent-2:#4ab3ff;
+  --gold:    #e6c23a;
+  --green:   #22c55e;
+}
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+html { background: var(--bg); }
+
 body {
   background-color: var(--bg);
   background-image: repeating-linear-gradient(
     180deg,
     transparent,
     transparent 79px,
-    rgba(255,255,255,0.015) 79px,
-    rgba(255,255,255,0.015) 80px
+    rgba(42, 57, 141, 0.04) 79px,
+    rgba(42, 57, 141, 0.04) 80px
   );
   color: var(--fg);
   font-family: var(--font-geist-sans), system-ui, Arial, sans-serif;
 }
 
-html {
-  background: var(--bg);
+[data-theme="dark"] body {
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent,
+    transparent 79px,
+    rgba(255, 255, 255, 0.015) 79px,
+    rgba(255, 255, 255, 0.015) 80px
+  );
 }
 
 @layer components {
@@ -44,7 +70,6 @@ html {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
   }
-  /* WC Red button with white text */
   .btn-primary {
     @apply btn bg-[var(--accent)] text-white hover:brightness-110;
   }
@@ -63,7 +88,5 @@ html {
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+  .text-balance { text-wrap: balance; }
 }

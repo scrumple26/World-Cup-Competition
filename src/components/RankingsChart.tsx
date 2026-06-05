@@ -7,6 +7,17 @@ import {
 import type { ChartSeries } from "@/lib/league";
 import { PALETTE } from "./CumulativeChart";
 
+function chartColors() {
+  const style = typeof window !== "undefined"
+    ? getComputedStyle(document.documentElement) : null;
+  return {
+    grid:   style?.getPropertyValue("--border").trim()  || "#D1D4D1",
+    axis:   style?.getPropertyValue("--muted").trim()   || "#6b7a8d",
+    bg:     style?.getPropertyValue("--bg-elev").trim() || "#f2f4f8",
+    border: style?.getPropertyValue("--border").trim()  || "#D1D4D1",
+  };
+}
+
 export function RankingsChart({
   series,
   playerCount,
@@ -14,6 +25,8 @@ export function RankingsChart({
   series: ChartSeries;
   playerCount: number;
 }) {
+  const c = chartColors();
+
   if (series.data.length === 0) {
     return (
       <div className="flex h-48 items-center justify-center text-sm text-[var(--muted)]">
@@ -25,11 +38,10 @@ export function RankingsChart({
   return (
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={series.data} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1a3560" />
-        <XAxis dataKey="date" stroke="#7a90b8" fontSize={12} />
-        {/* Invert Y: rank 1 at top, rank N at bottom */}
+        <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+        <XAxis dataKey="date" stroke={c.axis} fontSize={12} />
         <YAxis
-          stroke="#7a90b8"
+          stroke={c.axis}
           fontSize={12}
           domain={[1, playerCount]}
           reversed
@@ -38,12 +50,7 @@ export function RankingsChart({
           tickFormatter={(v) => `#${v}`}
         />
         <Tooltip
-          contentStyle={{
-            background: "#0a1628",
-            border: "1px solid #1a3560",
-            borderRadius: 8,
-            fontSize: 12,
-          }}
+          contentStyle={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, fontSize: 12 }}
           formatter={(val) => [`#${val}`, ""]}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
