@@ -34,6 +34,8 @@ export function PredictionsClient({
     lockIn,
     isUserLocked,
     locking,
+    lockError,
+    pendingCount,
   } = usePredictions(targetUid, groups);
 
   const [mode, setMode] = useState<Mode>("group");
@@ -46,7 +48,6 @@ export function PredictionsClient({
     return "group";
   });
   const [confirming, setConfirming] = useState(false);
-  const [lockError, setLockError] = useState<string | null>(null);
 
   function changeStage(s: Stage) {
     setStage(s);
@@ -68,13 +69,8 @@ export function PredictionsClient({
   const isAdmin = !!actAs;
 
   async function handleLockIn() {
-    setLockError(null);
-    try {
-      await lockIn();
-      setConfirming(false);
-    } catch (err) {
-      setLockError(err instanceof Error ? err.message : "Lock-in failed — try again.");
-    }
+    await lockIn();
+    if (!lockError) setConfirming(false);
   }
 
   return (
@@ -127,7 +123,8 @@ export function PredictionsClient({
             <div>
               <h1 className="text-2xl font-bold">Group Stage Predictions</h1>
               <p className="text-sm text-[var(--muted)]">
-                {Object.keys(matches).length}/{totalMatches} entered · auto-saved
+                {Object.keys(matches).length}/{totalMatches} entered
+                {pendingCount > 0 && !isUserLocked && <span className="ml-1 text-amber-400">· {pendingCount} unsaved</span>}
               </p>
             </div>
             <div className="flex rounded-lg border border-[var(--border)] p-1">
