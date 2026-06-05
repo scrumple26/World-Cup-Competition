@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWcData } from "@/lib/useWcData";
 import { isPlayed } from "@/lib/wcMap";
 import type { WcGroupStanding } from "@/lib/wcMap";
@@ -10,6 +10,31 @@ import { ScheduleClient } from "@/components/schedule/ScheduleClient";
 // ---- helpers ----
 
 const CT = "America/Chicago";
+const POLL_MS = 15 * 60_000;           // 15 minutes
+const POST_WINDOW_MS = 30 * 60_000;    // 30 min after last kickoff + ~95 min match
+const MATCH_DURATION_MS = 95 * 60_000; // generous max match length
+
+function ctDateStr(ts: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: CT, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(ts);
+}
+
+/**
+ * Returns the [windowStart, windowEnd] for standing updates today, or null if
+ * there are no fixtures today or the window hasn't started / has already ended.
+ */
+function todaysPollWindow(fixtures: WcMatch[]): [number, number] | null {
+  const todayStr = ctDateStr(Date.now());
+  const today = fixtures.filter(
+    (m) => ctDateStr(new Date(m.kickoff).getTime()) === todayStr,
+  );
+  if (today.length === 0) return null;
+  const kickoffs = today.map((m) => new Date(m.kickoff).getTime());
+  const first = Math.min(...kickoffs);
+  const last  = Math.max(...kickoffs);
+  return [first, last + MATCH_DURATION_MS + POST_WINDOW_MS];
+}
 
 function ctTime(iso: string): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -42,6 +67,37 @@ const TABS: { id: Tab; label: string }[] = [
 export function WorldCupClient() {
   const { data: wc, loading } = useWcData();
   const [tab, setTab] = useState<Tab>("standings");
+  const [liveStandings, setLiveStandings] = useState<WcGroupStanding[] | null>(null);
+  const [pollingActive, setPollingActive] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Poll standings every 15 min while we're in the active game window for today.
+  useEffect(() => {
+    if (!wc || tab !== "standings") return;
+
+    const window = todaysPollWindow(wc.fixtures);
+    const now = Date.now();
+    if (!window || now < window[0] || now > window[1]) return;
+
+    async function poll() {
+      try {
+        const res = await fetch("/api/wc/standings");
+        if (!res.ok) return;
+        const data = await res.json() as { groups: WcGroupStanding[] };
+        if (data.groups?.length) setLiveStandings(data.groups);
+      } catch { /* silent */ }
+    }
+
+    setPollingActive(true);
+    poll();
+    intervalRef.current = setInterval(poll, POLL_MS);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      setPollingActive(false);
+    };
+  }, [wc, tab]);
+
+  const displayStandings = liveStandings ?? wc?.standings ?? [];
 
   if (loading || !wc) {
     return <p className="text-[var(--muted)]">Loading…</p>;
@@ -54,7 +110,14 @@ export function WorldCupClient() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">World Cup 2026</h1>
         <div className="flex items-center gap-3">
+          {pollingActive ? (
+          <span className="flex items-center gap-1.5 text-xs text-green-400">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+            Live · updating every 15 min
+          </span>
+        ) : (
           <span className="text-xs text-[var(--muted)]">Via API-Football · updates every 3 hrs</span>
+        )}
           <div className="flex gap-1 rounded-lg border border-[var(--border)] p-1">
             {TABS.map((t) => (
               <button
@@ -77,7 +140,7 @@ export function WorldCupClient() {
         <p className="text-[var(--muted)]">No data yet — use Admin → Sync now to pull live data.</p>
       )}
 
-      {!noData && tab === "standings" && <StandingsView standings={wc.standings} />}
+      {!noData && tab === "standings" && <StandingsView standings={displayStandings} />}
       {!noData && tab === "schedule"  && <ScheduleClient />}
       {!noData && tab === "knockout"  && <KnockoutView fixtures={wc.fixtures} />}
     </div>
