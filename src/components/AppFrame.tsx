@@ -5,15 +5,26 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { NavBar } from "./NavBar";
 import { AuthScreen } from "./AuthScreen";
 import { CompleteProfileScreen } from "./CompleteProfileScreen";
+import { VerificationScreen } from "./VerificationScreen";
 
 export function AppFrame({ children }: { children: ReactNode }) {
-  const { user, loading, needsProfile, mockMode } = useAuth();
+  const { user, loading, needsProfile, awaitingVerification, unverifiedEmail, resendVerification, markVerified, mockMode } = useAuth();
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-[var(--muted)]">
         Loading…
       </div>
+    );
+  }
+
+  if (awaitingVerification) {
+    return (
+      <VerificationScreen
+        email={unverifiedEmail}
+        onVerified={markVerified}
+        onResend={resendVerification}
+      />
     );
   }
 

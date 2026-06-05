@@ -28,14 +28,17 @@ import {
 interface AuthState {
   user: UserProfile | null;
   loading: boolean;
-  /** True when Firebase Auth has a user but no Firestore profile doc exists yet. */
   needsProfile: boolean;
+  /** Set when Firebase Auth user exists but email is not yet verified. */
+  awaitingVerification: boolean;
+  unverifiedEmail: string;
   signUp: (email: string, password: string, teamName: string, firstName: string, lastName: string, logoFile?: File | null) => Promise<void>;
   logIn: (email: string, password: string) => Promise<void>;
   logOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  /** Creates the missing Firestore profile for an already-authenticated Firebase user. */
   completeProfile: (firstName: string, lastName: string, teamName: string, logoFile?: File | null) => Promise<void>;
+  resendVerification: () => Promise<void>;
+  markVerified: () => void;
   mockMode: boolean;
 }
 
@@ -51,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsProfile, setNeedsProfile] = useState(false);
+  const [awaitingVerification, setAwaitingVerification] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState("");
 
   // ---- mock mode bootstrap ----
   useEffect(() => {
@@ -81,9 +86,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!fbUser) {
               setUser(null);
               setNeedsProfile(false);
+              setAwaitingVerification(false);
               return;
             }
-            // Use server API (Admin SDK) — avoids Firestore client auth timing on reload.
+            // Require email verification except for the admin account.
+            const email = (fbUser.email ?? "").toLowerCase();
+            if (!fbUser.emailVerified && email !== ADMIN_EMAIL) {
+              setUser(null);
+              setNeedsProfile(false);
+              setAwaitingVerification(true);
+              setUnverifiedEmail(fbUser.email ?? "");
+              return;
+            }
+            setAwaitingVerification(false);
             const idToken = await fbUser.getIdToken();
             const res = await fetch("/api/profile", {
               headers: { Authorization: `Bearer ${idToken}` },
@@ -143,6 +158,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getClientAuth();
     if (!auth) throw new Error("Firebase not configured.");
     const cred = await createUserWithEmailAndPassword(auth, normEmail, password);
+
+    // Send verification email (non-fatal if it fails)
+    try {
+      const { sendEmailVerification } = await import("firebase/auth");
+      await sendEmailVerification(cred.user);
+    } catch { /* proceed anyway */ }
+
+    // Show verification screen — profile creation happens after verification.
+    setAwaitingVerification(true);
+    setUnverifiedEmail(normEmail);
+    setLoading(false);
+
+    // Upload logo + create profile in background (will be used after verification)
     const idToken = await cred.user.getIdToken();
 
     let logoUrl: string | undefined;
@@ -159,8 +187,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch { /* proceed without logo */ }
     }
 
-    const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName, logoUrl);
-    setUser(profile);
+    // Create profile in background so it's ready after the user verifies.
+    // Do NOT call setUser — onAuthStateChanged handles state once email is verified.
+    await createFirebaseProfile(idToken, teamName, firstName, lastName, logoUrl).catch(() => {});
   }
 
   async function completeProfile(firstName: string, lastName: string, teamName: string, logoFile?: File | null) {
@@ -187,6 +216,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const profile = await createFirebaseProfile(idToken, teamName, firstName, lastName, logoUrl);
     setUser(profile);
     setNeedsProfile(false);
+  }
+
+  async function resendVerification() {
+    const { getClientAuth } = await import("../firebase/client");
+    const { sendEmailVerification } = await import("firebase/auth");
+    const auth = getClientAuth();
+    if (!auth?.currentUser) throw new Error("Not signed in.");
+    await sendEmailVerification(auth.currentUser);
+  }
+
+  function markVerified() {
+    // Called by VerificationScreen when polling detects emailVerified = true.
+    // Trigger a reload so onAuthStateChanged fires with fresh user state.
+    window.location.reload();
   }
 
   async function refreshProfile() {
@@ -259,7 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ user, loading, needsProfile, signUp, logIn, logOut, refreshProfile, completeProfile, mockMode: USE_MOCK }}
+      value={{ user, loading, needsProfile, awaitingVerification, unverifiedEmail, signUp, logIn, logOut, refreshProfile, completeProfile, resendVerification, markVerified, mockMode: USE_MOCK }}
     >
       {children}
     </Ctx.Provider>

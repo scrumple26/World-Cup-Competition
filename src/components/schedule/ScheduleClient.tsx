@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { isPlayed } from "@/lib/wcMap";
 import type { WcMatch } from "@/lib/types";
 import type { LiveMatchDetails } from "@/app/api/wc/match/[id]/live/route";
+import type { MatchPredictionEntry } from "@/app/api/wc/match/[id]/predictions/route";
+import { displayName } from "@/lib/types";
 
 // ---- constants ----
 
@@ -63,6 +65,8 @@ export function ScheduleClient() {
   const [live, setLive] = useState<Record<number, WcMatch>>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [liveDetails, setLiveDetails] = useState<Record<number, LiveMatchDetails>>({});
+  const [predsId, setPredsId] = useState<number | null>(null);
+  const [matchPreds, setMatchPreds] = useState<Record<number, MatchPredictionEntry[]>>({});
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hideScores = user?.hideScores ?? false;
 
@@ -75,6 +79,18 @@ export function ScheduleClient() {
       setLiveDetails((prev) => ({ ...prev, [id]: data }));
     } catch { /* silent */ }
   }, []);
+
+  // Toggle predictions panel for non-live matches
+  async function togglePreds(id: number) {
+    setPredsId((prev) => (prev === id ? null : id));
+    if (matchPreds[id]) return; // already loaded
+    try {
+      const res = await fetch(`/api/wc/match/${id}/predictions`);
+      if (!res.ok) return;
+      const data = await res.json() as { predictions: MatchPredictionEntry[] };
+      setMatchPreds((prev) => ({ ...prev, [id]: data.predictions }));
+    } catch { /* silent */ }
+  }
 
   // Toggle expanded match; fetch details immediately
   function toggleExpand(id: number) {
@@ -172,19 +188,26 @@ export function ScheduleClient() {
             {matches.map((m) => {
               const display = live[m.id] ?? m;
               const isLiveMatch = LIVE_STATUSES.has(display.status);
+              const isDone = DONE_STATUSES.has(display.status);
               return (
                 <div key={m.id}>
                   <MatchRow
                     match={display}
                     hideScores={hideScores}
-                    expanded={expandedId === m.id}
-                    onExpand={isLiveMatch ? () => toggleExpand(m.id) : undefined}
+                    expanded={expandedId === m.id || predsId === m.id}
+                    onExpand={isLiveMatch ? () => toggleExpand(m.id) : () => togglePreds(m.id)}
                   />
                   {expandedId === m.id && isLiveMatch && (
                     <LivePanel
                       details={liveDetails[m.id] ?? null}
-                      match={display}
                       hideScores={hideScores}
+                    />
+                  )}
+                  {predsId === m.id && !isLiveMatch && (
+                    <PredsPanel
+                      predictions={matchPreds[m.id] ?? null}
+                      currentUid={user?.uid ?? null}
+                      isLocked={isDone || isPlayed(display)}
                     />
                   )}
                 </div>
@@ -314,7 +337,6 @@ function LivePanel({
   hideScores,
 }: {
   details: LiveMatchDetails | null;
-  match: WcMatch;
   hideScores: boolean;
 }) {
   if (!details) {
@@ -395,6 +417,69 @@ function StatRow({ label, home, away }: { label: string; home: number; away: num
       <span className="w-8 text-center font-medium">{home}</span>
       <span className="text-[var(--muted)]">{label}</span>
       <span className="w-8 text-center font-medium">{away}</span>
+    </div>
+  );
+}
+
+// ---- predictions panel ----
+
+function PredsPanel({
+  predictions,
+  currentUid,
+  isLocked,
+}: {
+  predictions: MatchPredictionEntry[] | null;
+  currentUid: string | null;
+  isLocked: boolean;
+}) {
+  if (!predictions) {
+    return (
+      <div className="border-t border-[var(--border)] bg-[var(--bg-elev)] px-4 py-3 text-xs text-[var(--muted)]">
+        Loading predictions…
+      </div>
+    );
+  }
+
+  const myPred = predictions.find((p) => p.uid === currentUid);
+  const canSee = isLocked || !!myPred;
+
+  return (
+    <div className="border-t border-[var(--border)] bg-[var(--bg-elev)] px-4 py-3 space-y-2">
+      <div className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
+        Predictions {isLocked ? "" : "· submit yours to see others'"}
+      </div>
+
+      {!canSee ? (
+        <p className="text-xs text-[var(--muted)] italic">
+          You haven&apos;t predicted this match yet. Submit your score to see what everyone else picked.
+        </p>
+      ) : predictions.length === 0 ? (
+        <p className="text-xs text-[var(--muted)]">No predictions submitted yet.</p>
+      ) : (
+        <div className="space-y-1">
+          {predictions.map((p) => {
+            const isMe = p.uid === currentUid;
+            return (
+              <div
+                key={p.uid}
+                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs ${isMe ? "bg-[var(--accent)]/10 font-semibold" : ""}`}
+              >
+                {p.logoUrl ? (
+                  <img src={p.logoUrl} alt="" className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--border)] text-[9px] font-bold text-[var(--muted)] flex-shrink-0">
+                    {p.teamName.charAt(0)}
+                  </span>
+                )}
+                <span className="flex-1 truncate">{displayName(p)}</span>
+                <span className="font-mono tabular-nums text-[var(--fg)]">
+                  {p.home} – {p.away}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

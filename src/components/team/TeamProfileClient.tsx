@@ -31,6 +31,7 @@ export function TeamProfileClient({ uid }: { uid: string }) {
     groups: Record<string, GroupPrediction>;
     third: ThirdPlacePrediction;
   } | null>(null);
+  const [viewerHasPreds, setViewerHasPreds] = useState<boolean | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
@@ -48,6 +49,15 @@ export function TeamProfileClient({ uid }: { uid: string }) {
       loadThirdPlace(uid),
     ]).then(([matches, groups, third]) => setPreds({ matches, groups, third }));
   }, [uid]);
+
+  // Check if the current viewer has submitted their own predictions (for gating)
+  useEffect(() => {
+    if (!user || uid === user.uid) { setViewerHasPreds(true); return; }
+    fetch(`/api/predictions?uid=${user.uid}`)
+      .then(r => r.json())
+      .then(d => setViewerHasPreds(Object.keys(d.matches ?? {}).length > 0))
+      .catch(() => setViewerHasPreds(false));
+  }, [uid, user]);
 
   if (lLoading || wcLoading || !league || !wc || !preds) {
     return <p className="text-[var(--muted)]">Loading team…</p>;
@@ -222,9 +232,18 @@ export function TeamProfileClient({ uid }: { uid: string }) {
         </section>
       )}
 
-      <section className="card p-4">
+      {/* Gate: must have your own predictions to see others' */}
+      {!isSelf && viewerHasPreds === false && (
+        <div className="card p-5 text-center">
+          <p className="text-sm text-[var(--muted)]">
+            Submit at least one match prediction to see other players&apos; picks.
+          </p>
+        </div>
+      )}
+
+      <section className={`card p-4 ${!isSelf && viewerHasPreds === false ? "hidden" : ""}`}>
         <h2 className="mb-3 font-semibold">
-          Match picks{" "}
+          {isSelf ? "My picks" : "Match picks"}{" "}
           <span className="text-sm font-normal text-[var(--muted)]">
             ({predEntries.length} entered)
           </span>
