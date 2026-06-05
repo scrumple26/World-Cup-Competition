@@ -4,31 +4,46 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
+import { buildGroupStandings } from "@/lib/league";
+import { FRIEND_GROUPS } from "@/lib/wc";
 import { displayName } from "@/lib/types";
 import type { WeeklyMessage } from "@/app/api/config/weekly-message/route";
 
 const CARDS = [
-  { href: "/predictions", emoji: "📝", title: "Make Predictions", desc: "Pick scores, group finishes & who advances." },
-  { href: "/worldcup",    emoji: "🌍", title: "World Cup",       desc: "Live standings, schedule & knockout bracket." },
-  { href: "/competition", emoji: "🏅", title: "Competition",     desc: "Leaderboard, groups & bracket." },
-  { href: "/rules",       emoji: "📖", title: "Rules",           desc: "Scoring and how the World Cup works." },
+  { href: "/predictions", emoji: "📝", title: "Predictions",  desc: "Pick scores, group finishes & who advances." },
+  { href: "/worldcup",    emoji: "🌍", title: "World Cup",    desc: "Live standings, schedule & knockout bracket." },
+  { href: "/rules",       emoji: "📖", title: "Rules",        desc: "Scoring and how the competition works." },
 ];
 
-// ---- Player of the Week helper ----
+// ---- helpers ----
 
-function mondayStr(): string {
-  const d = new Date();
-  const day = d.getDay(); // 0=Sun
-  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function scoreBeforeDate(history: { date: string; total: number }[], dateStr: string): number {
-  const before = [...history].sort((a, b) => a.date.localeCompare(b.date)).filter(h => h.date < dateStr);
-  return before.length > 0 ? before[before.length - 1].total : 0;
+function mondayStr(): string {
+  const d = new Date();
+  const day = d.getDay();
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  return isoDate(d);
 }
 
-// ---- Home page ----
+function yesterdayStr(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return isoDate(d);
+}
+
+function scoreOnDate(
+  history: { date: string; total: number }[],
+  dateStr: string,
+): number {
+  const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
+  const on = sorted.filter(h => h.date <= dateStr);
+  return on.length > 0 ? on[on.length - 1].total : 0;
+}
+
+// ---- page ----
 
 export default function Home() {
   const { user } = useAuth();
@@ -42,22 +57,41 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
-  // Player of the week — highest points gained since last Monday
+  // Player of the Week — most points since Monday
   const potw = useMemo(() => {
-    if (!league || league.users.length === 0) return null;
+    if (!league?.users.length) return null;
     const monday = mondayStr();
     const ranked = league.users.map(u => {
-      const score = league.scores[u.uid];
-      const weekPts = (score?.total ?? 0) - scoreBeforeDate(score?.history ?? [], monday);
-      return { user: u, score, weekPts };
+      const s = league.scores[u.uid];
+      const weekPts = (s?.total ?? 0) - scoreOnDate(s?.history ?? [], monday);
+      return { user: u, score: s, weekPts };
     }).sort((a, b) => b.weekPts - a.weekPts);
-    const top = ranked[0];
-    return top.weekPts > 0 ? top : null;
+    return ranked[0]?.weekPts > 0 ? ranked[0] : null;
   }, [league]);
+
+  // Biggest jump — most points gained yesterday
+  const bigJump = useMemo(() => {
+    if (!league?.users.length) return null;
+    const yesterday = yesterdayStr();
+    const dayBefore = isoDate(new Date(new Date(yesterday).getTime() - 86400_000));
+    const ranked = league.users.map(u => {
+      const s = league.scores[u.uid];
+      const end   = scoreOnDate(s?.history ?? [], yesterday);
+      const start = scoreOnDate(s?.history ?? [], dayBefore);
+      return { user: u, jump: end - start };
+    }).sort((a, b) => b.jump - a.jump);
+    return ranked[0]?.jump > 0 ? ranked[0] : null;
+  }, [league]);
+
+  // Competition groups
+  const groupStandings = useMemo(
+    () => league ? buildGroupStandings(league.users, league.scores) : null,
+    [league],
+  );
 
   return (
     <div className="space-y-5">
-      {/* Weekly admin message */}
+      {/* Admin weekly message */}
       {weeklyMsg?.text && (
         <div className="card border-[var(--accent)] bg-[var(--accent)]/5 p-4">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--accent)]">
@@ -67,45 +101,101 @@ export default function Home() {
         </div>
       )}
 
-      {/* Welcome + Player of the Week */}
-      <div className="card p-6">
+      {/* Welcome */}
+      <div className="card p-5">
         <h1 className="text-2xl font-bold">Welcome back, {user?.teamName} 👋</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          You&apos;re in <b>Group {user?.friendGroup}</b>. Lock in your World Cup
-          2026 predictions before kickoff to climb the table.
+          Group <b>{user?.friendGroup}</b> · Lock in your predictions before each kickoff.
         </p>
 
-        {potw && (
-          <div className="mt-4 flex items-center gap-3 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 px-4 py-3">
-            {potw.user.logoUrl ? (
-              <img src={potw.user.logoUrl} alt="" className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
-            ) : (
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--bg-elev)] text-sm font-bold text-[var(--muted)]">
-                {potw.user.teamName.charAt(0)}
-              </span>
-            )}
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-[var(--gold)]">
-                ⭐ Player of the Week
-              </div>
-              <div className="font-bold">
-                <Link href={`/team/${potw.user.uid}`} className="hover:underline">
-                  {displayName(potw.user)}
-                </Link>
-                {potw.user.uid === user?.uid && (
-                  <span className="ml-2 text-xs font-normal text-[var(--muted)]">that&apos;s you!</span>
+        {/* Player of the Week + Biggest Jump side by side */}
+        {(potw || bigJump) && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {potw && (
+              <div className="flex items-center gap-3 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 px-4 py-3">
+                {potw.user.logoUrl ? (
+                  <img src={potw.user.logoUrl} alt="" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg-elev)] text-xs font-bold text-[var(--muted)] flex-shrink-0">
+                    {potw.user.teamName.charAt(0)}
+                  </span>
                 )}
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--gold)]">⭐ Player of the Week</div>
+                  <Link href={`/team/${potw.user.uid}`} className="truncate font-bold hover:underline block">
+                    {displayName(potw.user)}
+                    {potw.user.uid === user?.uid && <span className="ml-1 text-xs font-normal text-[var(--muted)]">you!</span>}
+                  </Link>
+                  <div className="text-xs text-[var(--muted)]">{potw.user.teamName} · +{potw.weekPts} pts</div>
+                </div>
               </div>
-              <div className="text-xs text-[var(--muted)]">
-                {potw.user.teamName} · +{potw.weekPts} pts this week
+            )}
+            {bigJump && (
+              <div className="flex items-center gap-3 rounded-xl border border-[var(--accent-2)]/30 bg-[var(--accent-2)]/5 px-4 py-3">
+                {bigJump.user.logoUrl ? (
+                  <img src={bigJump.user.logoUrl} alt="" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg-elev)] text-xs font-bold text-[var(--muted)] flex-shrink-0">
+                    {bigJump.user.teamName.charAt(0)}
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent-2)]">📈 Biggest Jump Yesterday</div>
+                  <Link href={`/team/${bigJump.user.uid}`} className="truncate font-bold hover:underline block">
+                    {displayName(bigJump.user)}
+                    {bigJump.user.uid === user?.uid && <span className="ml-1 text-xs font-normal text-[var(--muted)]">you!</span>}
+                  </Link>
+                  <div className="text-xs text-[var(--muted)]">{bigJump.user.teamName} · +{bigJump.jump} pts yesterday</div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Quick nav cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Competition groups */}
+      {groupStandings && (
+        <div>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-[var(--muted)]">Your Competition</h2>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {FRIEND_GROUPS.map(g => (
+              <div key={g} className="card overflow-hidden">
+                <div className="bg-[var(--bg-elev)] px-3 py-2 text-xs font-bold uppercase tracking-widest text-[var(--accent-2)]">
+                  Group {g}
+                </div>
+                <div className="divide-y divide-[var(--border)]">
+                  {groupStandings[g].map((row, i) => {
+                    const isMe = row.user.uid === user?.uid;
+                    return (
+                      <Link
+                        key={row.user.uid}
+                        href={`/team/${row.user.uid}`}
+                        className={`flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--bg-elev)] ${isMe ? "bg-[var(--accent)]/10" : ""}`}
+                      >
+                        <span className={`w-4 text-xs font-bold ${i < 2 ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>{row.rank}</span>
+                        {row.user.logoUrl ? (
+                          <img src={row.user.logoUrl} alt="" className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--border)] text-[9px] font-bold text-[var(--muted)] flex-shrink-0">
+                            {row.user.teamName.charAt(0)}
+                          </span>
+                        )}
+                        <span className="flex-1 truncate font-medium">{row.user.teamName}</span>
+                        <span className="text-xs font-bold">{row.score?.total ?? 0}</span>
+                        {i < 2 && <span className="text-[var(--accent)] text-[10px]">●</span>}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-[var(--muted)]">● = projects to qualify · red = your row</p>
+        </div>
+      )}
+
+      {/* Quick nav */}
+      <div className="grid gap-4 sm:grid-cols-3">
         {CARDS.map((c) => (
           <Link
             key={c.href}
