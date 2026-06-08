@@ -10,6 +10,15 @@ import { FlashcardMode } from "./FlashcardMode";
 import { KnockoutPredictions } from "./KnockoutPredictions";
 import type { MatchPrediction, WcMatch } from "@/lib/types";
 
+const CT = "America/Chicago";
+
+function formatDeadline(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: CT, weekday: "short", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  }).format(new Date(iso));
+}
+
 // Compute group standings from predicted scores (mirrors GroupSection logic)
 function computeGroupStandings(
   teams: { id: number }[],
@@ -45,6 +54,17 @@ export function PredictionsClient({
   const { data, loading, error } = useWcData();
   const groups = data?.groups ?? [];
   const targetUid = actAs?.uid ?? user?.uid;
+
+  // Deadline = kickoff of the first group stage match
+  const deadline = useMemo(() => {
+    if (!data) return null;
+    const kickoffs = data.fixtures
+      .filter(m => m.round.startsWith("Group Stage"))
+      .map(m => m.kickoff)
+      .sort();
+    return kickoffs[0] ?? null;
+  }, [data]);
+
   const {
     loaded,
     matches,
@@ -61,10 +81,11 @@ export function PredictionsClient({
     resetThirdPlaceOverride,
     lockIn,
     isUserLocked,
+    isLocked,
     locking,
     lockError,
     pendingCount,
-  } = usePredictions(targetUid, groups);
+  } = usePredictions(targetUid, groups, deadline);
 
   // Compute the best 8 third-place teams from predicted match scores
   const autoThirdPlace = useMemo(() => {
@@ -88,7 +109,6 @@ export function PredictionsClient({
 
   const [mode, setMode] = useState<Mode>("group");
   const [stage, setStage] = useState<Stage>(() => {
-    // Persist selected stage (group/knockout) across navigations
     if (typeof sessionStorage !== "undefined") {
       const saved = sessionStorage.getItem("pred-stage");
       if (saved === "knockout") return "knockout";
@@ -130,11 +150,13 @@ export function PredictionsClient({
       )}
 
       {/* Locked banner */}
-      {isUserLocked && !isAdmin && (
+      {isLocked && !isAdmin && (
         <div className="rounded-lg border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-3 text-sm">
-          <span className="font-semibold text-[var(--accent)]">🔒 Predictions locked in.</span>
+          <span className="font-semibold text-[var(--accent)]">🔒 Predictions are locked.</span>
           <span className="ml-2 text-[var(--muted)]">
-            Your picks are submitted. Scores lock individually at each kickoff.
+            {isUserLocked
+              ? "Your picks are submitted."
+              : "The tournament has started — your picks were auto-saved."}
           </span>
         </div>
       )}
@@ -172,7 +194,7 @@ export function PredictionsClient({
               <h1 className="text-2xl font-bold">Group Stage Predictions</h1>
               <p className="text-sm text-[var(--muted)]">
                 {Object.keys(matches).length}/{totalMatches} entered
-                {pendingCount > 0 && !isUserLocked && <span className="ml-1 text-amber-400">· not locked in yet</span>}
+                {pendingCount > 0 && !isLocked && <span className="ml-1 text-amber-400">· not locked in yet</span>}
               </p>
             </div>
             <div className="flex rounded-lg border border-[var(--border)] p-1">
@@ -214,7 +236,7 @@ export function PredictionsClient({
                   saveStates={saveStates}
                   onReorder={(order, isManual) => setOrder(g.group, order, isManual)}
                   onMatchChange={setMatch}
-                  userLocked={isUserLocked}
+                  userLocked={isLocked}
                 />
               ))}
               <ThirdPlaceSelector
@@ -222,7 +244,7 @@ export function PredictionsClient({
                 groupOrders={groupOrders}
                 selected={thirdPlace}
                 overridden={thirdPlaceOverridden}
-                disabled={isUserLocked}
+                disabled={isLocked}
                 onToggle={toggleThird}
                 onOverride={overrideThirdPlace}
                 onReset={() => resetThirdPlaceOverride(autoThirdPlace)}
@@ -230,18 +252,10 @@ export function PredictionsClient({
             </div>
           )}
 
-          {/* Lock In section — only shown to real users, not admin acting-as */}
-          {!isAdmin && (
+          {/* Lock In section — only shown to real users before the deadline */}
+          {!isAdmin && !isLocked && (
             <div className="card p-5 space-y-3">
-              {isUserLocked ? (
-                <div className="text-center">
-                  <div className="text-2xl mb-1">🔒</div>
-                  <div className="font-semibold">Your predictions are locked in</div>
-                  <div className="text-sm text-[var(--muted)] mt-1">
-                    Individual match picks still lock automatically at kickoff.
-                  </div>
-                </div>
-              ) : confirming ? (
+              {confirming ? (
                 <div className="space-y-4">
                   <div>
                     <div className="font-semibold">Review your picks</div>
@@ -302,21 +316,28 @@ export function PredictionsClient({
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="font-semibold">Ready to finalise?</div>
-                    <div className="text-sm text-[var(--muted)]">
-                      Your picks auto-save as you enter them — you can leave and come back any time.
-                      When you&apos;re happy with everything, lock in to prevent further changes.
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="font-semibold">Ready to finalise?</div>
+                      <div className="text-sm text-[var(--muted)]">
+                        Your picks auto-save as you enter them — you can leave and come back any time.
+                        Lock in when you&apos;re happy with everything.
+                      </div>
                     </div>
+                    <button
+                      onClick={() => setConfirming(true)}
+                      disabled={Object.keys(matches).length === 0}
+                      className="btn-primary px-6"
+                    >
+                      🔒 Lock In Predictions
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setConfirming(true)}
-                    disabled={Object.keys(matches).length === 0}
-                    className="btn-primary px-6"
-                  >
-                    🔒 Lock In Predictions
-                  </button>
+                  {deadline && (
+                    <p className="text-xs text-amber-400/80">
+                      ⏰ All predictions lock when the first match kicks off · {formatDeadline(deadline)}
+                    </p>
+                  )}
                 </div>
               )}
             </div>

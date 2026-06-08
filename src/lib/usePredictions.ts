@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   GroupPrediction,
   MatchPrediction,
@@ -42,14 +42,14 @@ function clearPending(uid: string) {
 /**
  * Manages predictions with localStorage soft-save.
  *
- * Nothing is written to Firestore until the user explicitly calls lockIn().
- * localStorage persists picks across navigation, tab switching, and logout/login
- * with the same account.
- *
- * On mount: merges Firestore data (already-locked picks) with any pending localStorage data.
- * On lockIn: POSTs everything to /api/lock-in (Admin SDK), then clears localStorage.
+ * Nothing is written to Firestore until the user calls lockIn() OR the deadline passes.
+ * The deadline is the kickoff time of the first group stage match — all picks lock then.
  */
-export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
+export function usePredictions(
+  uid: string | undefined,
+  groups: GroupBundle[],
+  deadline?: string | null,
+) {
   const [matches,    setMatches]    = useState<Record<number, MatchPrediction>>({});
   const [groupOrders,setGroupOrders] = useState<Record<string, number[]>>({});
   const [groupOverridden, setGroupOverriddenState] = useState<Record<string, boolean>>({});
@@ -60,8 +60,25 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
   const [loaded,     setLoaded]     = useState(false);
   const [lockError,  setLockError]  = useState<string | null>(null);
 
-  // saveStates is always "idle" — we no longer auto-save per card,
-  // but keep the field for API compatibility with MatchPredictionCard.
+  // ---- deadline enforcement ----
+
+  const [isPastDeadline, setIsPastDeadline] = useState(() =>
+    deadline ? Date.now() >= new Date(deadline).getTime() : false,
+  );
+
+  // Timer that flips isPastDeadline when the page is open as deadline approaches
+  useEffect(() => {
+    if (!deadline || isPastDeadline) return;
+    const ms = new Date(deadline).getTime() - Date.now();
+    if (ms <= 0) { setIsPastDeadline(true); return; }
+    const t = setTimeout(() => setIsPastDeadline(true), Math.min(ms, 2_147_483_647));
+    return () => clearTimeout(t);
+  }, [deadline, isPastDeadline]);
+
+  // isLocked = manually locked in OR deadline has passed
+  const isLocked = isUserLocked || isPastDeadline;
+
+  // saveStates kept for API compatibility with MatchPredictionCard
   const saveStates: Record<number, SaveState> = useMemo(() => ({}), []);
 
   // Load on mount: merge Firestore (locked picks) + localStorage (pending)
@@ -72,11 +89,10 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
       .then(r => r.json())
       .then(d => {
         if (!active) return;
-        const isLocked = !!d.userLocked;
-        setIsUserLocked(isLocked);
+        const fireLocked = !!d.userLocked;
+        setIsUserLocked(fireLocked);
 
-        if (isLocked) {
-          // Already submitted — use Firestore data only, ignore localStorage
+        if (fireLocked) {
           setMatches(d.matches ?? {});
           const orders: Record<string, number[]> = {};
           const overrides: Record<string, boolean> = {};
@@ -88,9 +104,8 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
           setGroupOrders(orders);
           setGroupOverriddenState(overrides);
           setThirdPlaceState((d.third as ThirdPlacePrediction)?.advancing ?? []);
-          clearPending(uid); // clean up any leftover localStorage
+          clearPending(uid);
         } else {
-          // Not locked yet — merge Firestore with localStorage (localStorage wins)
           const pending = loadPending(uid);
           const mergedMatches = { ...(d.matches ?? {}), ...pending.matches };
           setMatches(mergedMatches);
@@ -102,7 +117,6 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
             orders[k] = gp.order;
             if (gp.overridden) overrides[k] = true;
           }
-          // Merge group orders from localStorage
           for (const [k, v] of Object.entries(pending.groups ?? {})) {
             orders[k] = v.order;
             if (v.overridden) overrides[k] = true;
@@ -120,7 +134,6 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
       })
       .catch(() => {
         if (!active) return;
-        // Fall back to localStorage only
         const pending = loadPending(uid ?? "");
         setMatches(pending.matches);
         const orders: Record<string, number[]> = {};
@@ -149,11 +162,11 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
     });
   }, [loaded, groups]);
 
-  // ---- setters — all write to localStorage, nothing to Firestore ----
+  // ---- setters — all write to localStorage, blocked after deadline ----
 
   const setMatch = useCallback(
     (fixtureId: number, home: number | null, away: number | null, predictedWinner?: Outcome) => {
-      if (!uid) return;
+      if (!uid || isUserLocked || isPastDeadline) return;
       const pred: MatchPrediction = {
         fixtureId,
         home: home ?? 0,
@@ -163,30 +176,29 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
       };
       setMatches(prev => {
         const next = { ...prev, [fixtureId]: pred };
-        // Persist to localStorage immediately
         const pending = loadPending(uid);
         savePending(uid, { ...pending, matches: next });
         return next;
       });
     },
-    [uid],
+    [uid, isUserLocked, isPastDeadline],
   );
 
   const setOrder = useCallback(
     (group: string, order: number[], overridden = false) => {
-      if (!uid) return;
+      if (!uid || isUserLocked || isPastDeadline) return;
       setGroupOrders(prev => ({ ...prev, [group]: order }));
       setGroupOverriddenState(prev => ({ ...prev, [group]: overridden }));
       const pending = loadPending(uid);
-      const groups = { ...pending.groups, [group]: { group, order, overridden } };
-      savePending(uid, { ...pending, groups });
+      const grps = { ...pending.groups, [group]: { group, order, overridden } };
+      savePending(uid, { ...pending, groups: grps });
     },
-    [uid],
+    [uid, isUserLocked, isPastDeadline],
   );
 
   const toggleThird = useCallback(
     (teamId: number, max: number) => {
-      if (!uid) return;
+      if (!uid || isUserLocked || isPastDeadline) return;
       setThirdPlaceOverridden(true);
       setThirdPlaceState(prev => {
         let next: number[];
@@ -198,37 +210,35 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
         return next;
       });
     },
-    [uid],
+    [uid, isUserLocked, isPastDeadline],
   );
 
-  /** Called by PredictionsClient when the auto-computed selection changes. */
   const setThirdPlaceAuto = useCallback(
     (ids: number[]) => {
-      if (!uid || thirdPlaceOverridden) return;
+      if (!uid || thirdPlaceOverridden || isUserLocked || isPastDeadline) return;
       setThirdPlaceState(ids);
       const pending = loadPending(uid);
       savePending(uid, { ...pending, thirdPlace: ids, thirdPlaceOverridden: false });
     },
-    [uid, thirdPlaceOverridden],
+    [uid, thirdPlaceOverridden, isUserLocked, isPastDeadline],
   );
 
-  /** Mark third-place as manually overridden without changing the selection. */
   const overrideThirdPlace = useCallback(() => {
-    if (!uid) return;
+    if (!uid || isUserLocked || isPastDeadline) return;
     setThirdPlaceOverridden(true);
     const pending = loadPending(uid);
     savePending(uid, { ...pending, thirdPlaceOverridden: true });
-  }, [uid]);
+  }, [uid, isUserLocked, isPastDeadline]);
 
   const resetThirdPlaceOverride = useCallback(
     (autoIds: number[]) => {
-      if (!uid) return;
+      if (!uid || isUserLocked || isPastDeadline) return;
       setThirdPlaceOverridden(false);
       setThirdPlaceState(autoIds);
       const pending = loadPending(uid);
       savePending(uid, { ...pending, thirdPlace: autoIds, thirdPlaceOverridden: false });
     },
-    [uid],
+    [uid, isUserLocked, isPastDeadline],
   );
 
   // ---- lockIn — the only write to Firestore ----
@@ -245,7 +255,6 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Not signed in — please refresh and try again.");
 
-      // Save all predictions via Admin SDK
       const res = await fetch("/api/lock-in", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -255,7 +264,6 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
         const { error } = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(error ?? "Lock-in failed");
       }
-      // Also save group orders and third place
       const pending = loadPending(uid);
       for (const gp of Object.values(pending.groups)) {
         await fetch("/api/predictions", {
@@ -282,15 +290,28 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
     }
   }, [uid, matches, locking, isUserLocked]);
 
+  // Keep a stable ref so the auto-lock effect always calls the latest lockIn
+  const lockInRef = useRef(lockIn);
+  useEffect(() => { lockInRef.current = lockIn; });
+
+  // Auto-submit pending picks when the deadline passes (fires once)
+  const autoLockFired = useRef(false);
+  useEffect(() => {
+    if (!isPastDeadline || isUserLocked || !loaded || !uid || autoLockFired.current) return;
+    autoLockFired.current = true;
+    void lockInRef.current();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPastDeadline, isUserLocked, loaded, uid]);
+
   const pendingCount = useMemo(() => {
-    if (!uid || isUserLocked) return 0;
+    if (!uid || isLocked) return 0;
     try {
       const raw = localStorage.getItem(lsKey(uid));
       if (!raw) return 0;
       const p = JSON.parse(raw) as PendingStore;
       return Object.keys(p.matches ?? {}).length;
     } catch { return 0; }
-  }, [uid, isUserLocked, matches]); // matches as dep so it recalculates when picks change
+  }, [uid, isLocked, matches]);
 
   return {
     loaded,
@@ -308,6 +329,8 @@ export function usePredictions(uid: string | undefined, groups: GroupBundle[]) {
     resetThirdPlaceOverride,
     lockIn,
     isUserLocked,
+    isPastDeadline,
+    isLocked,
     locking,
     lockError,
     pendingCount,
