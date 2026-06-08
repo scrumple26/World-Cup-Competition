@@ -22,6 +22,7 @@
 
 # dev screenshots
 /.shots
+/scripts/*.png
 
 # debug
 npm-debug.log*
