@@ -531,6 +531,16 @@ function PredsPanel({
   const awayWins = predictions.filter((p) => p.home < p.away).length;
   const total = predictions.length;
 
+  // Most popular predicted scores
+  const topPicks = (() => {
+    const counts = new Map<string, number>();
+    for (const p of predictions) {
+      const k = `${p.home}–${p.away}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  })();
+
   return (
     <div className="border-t border-[var(--border)] bg-[var(--bg-elev)] px-4 py-3 space-y-2">
       <div className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
@@ -567,6 +577,25 @@ function PredsPanel({
             <span><span className="text-[var(--accent)] font-semibold">{homeWins}</span> home</span>
             <span>{draws} draw</span>
             <span><span className="text-[var(--accent-2)] font-semibold">{awayWins}</span> away</span>
+          </div>
+        </div>
+      )}
+
+      {/* Most popular predicted scores */}
+      {canSee && topPicks.length > 0 && (
+        <div>
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
+            Most picked scores
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {topPicks.map(([score, count], i) => (
+              <span
+                key={score}
+                className={`rounded-full px-2.5 py-1 text-xs font-mono ${i === 0 ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "bg-[var(--border)] text-[var(--fg)]"}`}
+              >
+                {score} <span className="font-sans text-[var(--muted)]">×{count}</span>
+              </span>
+            ))}
           </div>
         </div>
       )}

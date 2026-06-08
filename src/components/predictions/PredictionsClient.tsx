@@ -242,13 +242,48 @@ export function PredictionsClient({
                   </div>
                 </div>
               ) : confirming ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold">
-                    Lock in {Object.keys(matches).length} prediction{Object.keys(matches).length !== 1 ? "s" : ""}?
-                  </p>
-                  <p className="text-sm text-[var(--muted)]">
-                    Once locked, you won&apos;t be able to change your picks. Make sure you&apos;re happy with all your scores, group finishes, and third-place selections.
-                  </p>
+                <div className="space-y-4">
+                  <div>
+                    <div className="font-semibold">Review your picks</div>
+                    {(() => {
+                      const unfilled = groups.reduce((acc, g) => acc + g.matches.filter(m => !matches[m.id]).length, 0);
+                      return (
+                        <div className="text-sm text-[var(--muted)]">
+                          {Object.keys(matches).length} predictions entered
+                          {unfilled > 0 && <span className="ml-1 text-amber-400">· {unfilled} unfilled</span>}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
+                    {groups.map((g) => (
+                      <div key={g.group}>
+                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
+                          Group {g.letter}
+                        </div>
+                        <div className="space-y-0.5">
+                          {g.matches.map((m) => {
+                            const pred = matches[m.id];
+                            return (
+                              <div key={m.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-md bg-[var(--bg-elev)] px-2.5 py-1.5 text-xs">
+                                <div className="flex items-center justify-end gap-1.5 min-w-0">
+                                  {m.homeLogo && <img src={m.homeLogo} alt="" className="h-4 w-6 rounded-sm object-contain flex-shrink-0" />}
+                                  <span className="truncate text-right">{m.homeTeamName}</span>
+                                </div>
+                                <span className={`w-14 text-center font-mono font-bold tabular-nums ${pred ? "" : "text-amber-400"}`}>
+                                  {pred ? `${pred.home}–${pred.away}` : "—"}
+                                </span>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="truncate">{m.awayTeamName}</span>
+                                  {m.awayLogo && <img src={m.awayLogo} alt="" className="h-4 w-6 rounded-sm object-contain flex-shrink-0" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                   {lockError && <p className="text-sm text-red-400">{lockError}</p>}
                   <div className="flex gap-2">
                     <button
@@ -256,13 +291,13 @@ export function PredictionsClient({
                       disabled={locking}
                       className="btn-primary flex-1"
                     >
-                      {locking ? "Locking in…" : "Yes, lock in my predictions"}
+                      {locking ? "Locking in…" : "✓ Confirm & lock in"}
                     </button>
                     <button
                       onClick={() => setConfirming(false)}
                       className="btn-ghost flex-1"
                     >
-                      Cancel
+                      ← Go back and edit
                     </button>
                   </div>
                 </div>
