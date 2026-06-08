@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFixtures, getStandings } from "@/lib/apiFootball";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toWcMatch, toGroupStandings } from "@/lib/wcMap";
-import { recomputeAllScores } from "@/lib/serverScoring";
+import { recomputeAllScores, autoFillMissingPredictions } from "@/lib/serverScoring";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
 
 export const dynamic = "force-dynamic";
@@ -80,13 +80,18 @@ async function handle(req: NextRequest) {
       await sBatch.commit();
     }
 
-    // 5. Recompute everyone's scores from the latest results
+    // 5. Auto-fill missing predictions for any match whose kickoff has passed
+    const wcMatches = fixtures.map(toWcMatch);
+    const autoFilled = await autoFillMissingPredictions(db, wcMatches);
+
+    // 6. Recompute everyone's scores from the latest results
     const scored = await recomputeAllScores(db);
 
     return NextResponse.json({
       ok: true,
       matchesSynced: matchWrites,
       groupsSynced: standings.length,
+      autoFilled,
       usersScored: scored,
     });
   } catch (err) {

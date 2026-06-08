@@ -102,6 +102,66 @@ async function loadUserPredictions(
   return { matches, groupOrders, thirdAdvancing };
 }
 
+/** Generate a sensible random scoreline: both 1–4, result consistent with a random outcome. */
+function randomScoreline(): { home: number; away: number } {
+  const outcome = Math.floor(Math.random() * 3); // 0=home, 1=draw, 2=away
+  if (outcome === 1) {
+    const s = Math.floor(Math.random() * 4) + 1;
+    return { home: s, away: s };
+  }
+  if (outcome === 0) {
+    const home = Math.floor(Math.random() * 3) + 2; // 2–4
+    const away = Math.floor(Math.random() * (home - 1)) + 1; // 1 to home-1
+    return { home, away };
+  }
+  const away = Math.floor(Math.random() * 3) + 2; // 2–4
+  const home = Math.floor(Math.random() * (away - 1)) + 1; // 1 to away-1
+  return { home, away };
+}
+
+/**
+ * For every match whose kickoff has passed, ensure every user has a prediction.
+ * Users who already have a pick keep it untouched; those who don't get a
+ * randomly generated locked prediction so scoring works for everyone.
+ */
+export async function autoFillMissingPredictions(
+  db: Firestore,
+  wcMatches: WcMatch[],
+): Promise<number> {
+  const now = new Date().toISOString();
+  const lockedMatches = wcMatches.filter((m) => m.kickoff < now);
+  if (lockedMatches.length === 0) return 0;
+
+  const usersSnap = await db.collection("users").get();
+  let filled = 0;
+
+  for (const userDoc of usersSnap.docs) {
+    const uid = userDoc.id;
+    const predsRef = db.collection("predictions").doc(uid).collection("matches");
+    const existingSnap = await predsRef.get();
+    const existingIds = new Set(existingSnap.docs.map((d) => d.id));
+
+    const toWrite: MatchPrediction[] = [];
+    for (const match of lockedMatches) {
+      if (existingIds.has(String(match.id))) continue;
+      const { home, away } = randomScoreline();
+      toWrite.push({ fixtureId: match.id, home, away, submittedAt: Date.now(), locked: true, autoFilled: true });
+    }
+
+    // Commit in batches of 400
+    for (let i = 0; i < toWrite.length; i += 400) {
+      const batch = db.batch();
+      for (const pred of toWrite.slice(i, i + 400)) {
+        batch.set(predsRef.doc(String(pred.fixtureId)), pred);
+      }
+      await batch.commit();
+      filled += toWrite.slice(i, i + 400).length;
+    }
+  }
+
+  return filled;
+}
+
 /**
  * Recompute every user's score from cached results + their predictions,
  * persisting `scores/{uid}` and appending a daily point to the history series.

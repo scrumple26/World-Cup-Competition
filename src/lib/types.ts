@@ -63,6 +63,8 @@ export interface MatchPrediction {
   submittedAt: number;
   /** Set true once locked at kickoff. */
   locked?: boolean;
+  /** Set true when the system auto-filled this prediction at kickoff (user made no pick). */
+  autoFilled?: boolean;
   /**
    * For knockout matches where the user predicts a draw scoreline,
    * they must also pick who wins (penalties/ET). This field stores
