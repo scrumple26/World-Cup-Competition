@@ -19,6 +19,62 @@ function formatDeadline(iso: string): string {
   }).format(new Date(iso));
 }
 
+function pad(n: number) { return String(n).padStart(2, "0"); }
+
+function CountdownBanner({ deadline }: { deadline: string }) {
+  const [secondsLeft, setSecondsLeft] = useState(() =>
+    Math.max(0, Math.floor((new Date(deadline).getTime() - Date.now()) / 1000)),
+  );
+
+  useEffect(() => {
+    if (secondsLeft === 0) return;
+    const t = setInterval(() => {
+      setSecondsLeft(() => {
+        const next = Math.max(0, Math.floor((new Date(deadline).getTime() - Date.now()) / 1000));
+        if (next === 0) clearInterval(t);
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [deadline, secondsLeft === 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (secondsLeft === 0) return null;
+
+  const days    = Math.floor(secondsLeft / 86400);
+  const hours   = Math.floor((secondsLeft % 86400) / 3600);
+  const minutes = Math.floor((secondsLeft % 3600) / 60);
+  const seconds = secondsLeft % 60;
+  const urgent  = secondsLeft < 3600; // < 1 hour
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${urgent ? "border-red-500/30 bg-red-500/5" : "border-amber-500/20 bg-amber-500/5"}`}>
+      <div className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${urgent ? "text-red-400" : "text-amber-400"}`}>
+        ⏰ Predictions lock in
+      </div>
+      <div className="flex items-end gap-3">
+        {(days > 0 ? [
+          { v: days,    l: "days" },
+          { v: hours,   l: "hrs"  },
+          { v: minutes, l: "min"  },
+          { v: seconds, l: "sec"  },
+        ] : [
+          { v: hours,   l: "hrs"  },
+          { v: minutes, l: "min"  },
+          { v: seconds, l: "sec"  },
+        ]).map(({ v, l }) => (
+          <div key={l} className="flex flex-col items-center">
+            <span className={`text-2xl font-bold tabular-nums leading-none ${urgent ? "text-red-300" : "text-[var(--fg)]"}`}>
+              {pad(v)}
+            </span>
+            <span className="mt-0.5 text-[10px] text-[var(--muted)]">{l}</span>
+          </div>
+        ))}
+        <span className="mb-0.5 text-xs text-[var(--muted)]">· {formatDeadline(deadline)} CT</span>
+      </div>
+    </div>
+  );
+}
+
 // Compute group standings from predicted scores (mirrors GroupSection logic)
 function computeGroupStandings(
   teams: { id: number }[],
@@ -160,6 +216,9 @@ export function PredictionsClient({
           </span>
         </div>
       )}
+
+      {/* Countdown */}
+      {!isLocked && deadline && <CountdownBanner deadline={deadline} />}
 
       {/* Stage tabs */}
       <div className="flex rounded-lg border border-[var(--border)] p-1 sm:w-fit">
@@ -333,11 +392,6 @@ export function PredictionsClient({
                       🔒 Lock In Predictions
                     </button>
                   </div>
-                  {deadline && (
-                    <p className="text-xs text-amber-400/80">
-                      ⏰ All predictions lock when the first match kicks off · {formatDeadline(deadline)}
-                    </p>
-                  )}
                 </div>
               )}
             </div>
