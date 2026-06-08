@@ -219,6 +219,8 @@ export function TeamProfileClient({ uid }: { uid: string }) {
         </div>
       </div>
 
+      <Passport predEntries={predEntries} isSelf={isSelf} />
+
       {isSelf && <ReportIssue user={p} />}
 
       {isSelf && (
@@ -355,6 +357,116 @@ export function TeamProfileClient({ uid }: { uid: string }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Passport ──────────────────────────────────────────────────────────────────
+
+function roundLabel(round: string): string {
+  if (round.startsWith("Group Stage")) return round.replace("Group Stage - ", "").trim();
+  if (round === "Round of 32") return "R32";
+  if (round === "Round of 16") return "R16";
+  if (round === "Quarter-finals") return "QF";
+  if (round === "Semi-finals") return "SF";
+  if (round === "3rd Place Final") return "3rd";
+  if (round === "Final") return "Final";
+  return round;
+}
+
+const STAMP_ROTATIONS = [-2, 1.5, -1, 2.5, -1.5, 1, -2.5, 2, -1, 1.5, -2, 1];
+
+function Passport({
+  predEntries,
+  isSelf,
+}: {
+  predEntries: { p: MatchPrediction; m: import("@/lib/types").WcMatch | undefined }[];
+  isSelf: boolean;
+}) {
+  const stamps = predEntries.filter(({ p, m }) => {
+    if (!m || m.goals.home === null || m.goals.away === null) return false;
+    if (!["FT", "AET", "PEN"].includes(m.status)) return false;
+    return p.home === m.goals.home && p.away === m.goals.away;
+  });
+
+  return (
+    <div
+      className="overflow-hidden rounded-xl"
+      style={{ background: "linear-gradient(135deg, #0d3320 0%, #0a2318 100%)" }}
+    >
+      {/* Passport cover bar */}
+      <div className="flex items-center justify-between px-5 pt-4 pb-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400/70">
+            Prediction Passport
+          </div>
+          <div className="mt-0.5 text-xs font-semibold text-emerald-100/60">
+            FIFA World Cup 2026
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">🌍</span>
+          {stamps.length > 0 && (
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 text-sm font-bold text-emerald-300">
+              {stamps.length}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Stamp grid */}
+      <div className="px-5 pb-5">
+        {stamps.length === 0 ? (
+          <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-emerald-800/60">
+            <p className="text-center text-xs text-emerald-700/80">
+              {isSelf
+                ? "Predict the exact score of a match to earn your first stamp"
+                : "No perfect predictions yet"}
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-3">
+            {stamps.map(({ p, m }, idx) => !m ? null : (
+              <div
+                key={p.fixtureId}
+                className="relative flex flex-col items-center rounded border-2 border-amber-100/30 bg-amber-50/95 px-3 py-2 shadow-md"
+                style={{
+                  transform: `rotate(${STAMP_ROTATIONS[idx % STAMP_ROTATIONS.length]}deg)`,
+                  minWidth: 88,
+                }}
+              >
+                {/* Perforated edge effect */}
+                <div className="absolute inset-x-0 top-0 flex justify-between px-1">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <span key={i} className="h-1.5 w-1.5 -translate-y-[3px] rounded-full bg-[#0d3320]" />
+                  ))}
+                </div>
+                <div className="absolute inset-x-0 bottom-0 flex justify-between px-1">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <span key={i} className="h-1.5 w-1.5 translate-y-[3px] rounded-full bg-[#0d3320]" />
+                  ))}
+                </div>
+
+                {/* Flags */}
+                <div className="mt-1 flex items-center gap-1.5">
+                  <img src={m.homeLogo} alt={m.homeTeamName} className="h-7 w-10 rounded-sm object-contain drop-shadow" />
+                  <img src={m.awayLogo} alt={m.awayTeamName} className="h-7 w-10 rounded-sm object-contain drop-shadow" />
+                </div>
+
+                {/* Score */}
+                <div className="mt-1 font-mono text-sm font-bold text-gray-800">
+                  {p.home}–{p.away}
+                </div>
+
+                {/* Round label */}
+                <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                  {roundLabel(m.round)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
