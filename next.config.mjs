@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  // cache bust: firebase env vars
+};
 
 export default nextConfig;
