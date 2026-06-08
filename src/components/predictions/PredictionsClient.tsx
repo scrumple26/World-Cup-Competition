@@ -141,7 +141,7 @@ export function PredictionsClient({
     locking,
     lockError,
     pendingCount,
-  } = usePredictions(targetUid, groups, deadline);
+  } = usePredictions(targetUid, groups, deadline, !actAs);
 
   // Compute the best 8 third-place teams from predicted match scores
   const autoThirdPlace = useMemo(() => {

@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { ADMIN_EMAIL } from "./config";
 
 const FROM = "WC 2026 Competition <noreply@globalfootballcup.com>";
 
@@ -88,6 +89,37 @@ export async function sendPasswordResetEmail(
       `<p>We received a request to reset your password. Click the button below to choose a new one.</p>
        <p><a href="${resetLink}" class="btn">Reset password</a></p>
        <p>This link expires in <strong>1 hour</strong>. If you didn't request this, ignore this email.</p>`,
+    ),
+  });
+
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/**
+ * Notify the admin that a new player has completed sign-up.
+ * Sent to ADMIN_EMAIL when a profile is created (i.e. after email verification).
+ */
+export async function sendSignupNotification(profile: {
+  firstName: string;
+  lastName: string;
+  teamName: string;
+  email: string;
+  friendGroup: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) return { ok: false, error: "Resend not configured" };
+
+  const { firstName, lastName, teamName, email, friendGroup } = profile;
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: ADMIN_EMAIL,
+    subject: `New sign-up: ${teamName}`,
+    text: `New player joined WC 2026 Competition\n\nName: ${firstName} ${lastName}\nTeam: ${teamName}\nEmail: ${email}\nGroup: ${friendGroup}\n\nglobalfootballcup.com`,
+    html: baseTemplate(
+      "New player joined",
+      `<p>A new player just completed sign-up:</p>
+       <p><strong>${firstName} ${lastName}</strong> — ${teamName}<br/>
+       ${email}<br/>Friend group ${friendGroup}</p>`,
     ),
   });
 

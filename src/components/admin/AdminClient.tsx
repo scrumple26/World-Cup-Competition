@@ -6,7 +6,8 @@ import { useLeague } from "@/lib/useLeague";
 import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
-import { overrideResult, removeUser, setUserGroup, syncNow } from "@/lib/adminRepo";
+import type { FeedPost } from "@/lib/feedTypes";
+import { createFeedPost, deleteFeedPost, fillTeams, overrideResult, removeUser, setUserGroup, syncNow } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 
 export function AdminClient() {
@@ -18,6 +19,12 @@ export function AdminClient() {
   const [weeklyMsg, setWeeklyMsg] = useState("");
   const [msgSaving, setMsgSaving] = useState(false);
   const [predCounts, setPredCounts] = useState<Record<string, number>>({});
+  const [posting, setPosting] = useState(false);
+  const [postText, setPostText] = useState("");
+  const [postImage, setPostImage] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [filling, setFilling] = useState(false);
 
   // Load current weekly message
   useEffect(() => {
@@ -26,6 +33,14 @@ export function AdminClient() {
       .then(d => setWeeklyMsg(d.text ?? ""))
       .catch(() => {});
   }, []);
+
+  const loadPosts = () => {
+    fetch("/api/feed")
+      .then(r => r.json())
+      .then(d => setPosts(d.posts ?? []))
+      .catch(() => {});
+  };
+  useEffect(() => { loadPosts(); }, []);
 
   // Load prediction counts for each player
   useEffect(() => {
@@ -85,6 +100,103 @@ export function AdminClient() {
           {toast}
         </div>
       )}
+
+      {/* Post to the activity feed */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Post to the activity feed</h2>
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Share an update with everyone — add a message, an image, or both. It appears at the top of the feed on the home page.
+        </p>
+        <textarea
+          className="input min-h-[70px] resize-y text-sm"
+          placeholder="Write something for the feed…"
+          value={postText}
+          onChange={e => setPostText(e.target.value)}
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <input
+            key={fileInputKey}
+            type="file"
+            accept="image/*"
+            onChange={e => setPostImage(e.target.files?.[0] ?? null)}
+            className="text-xs text-[var(--muted)] file:mr-2 file:rounded-md file:border-0 file:bg-[var(--bg-elev)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--fg)]"
+          />
+          <button
+            className="btn-primary px-4 py-2 text-sm"
+            disabled={posting || (!postText.trim() && !postImage)}
+            onClick={async () => {
+              setPosting(true);
+              try {
+                const r = await createFeedPost(postText.trim(), postImage);
+                if (r.ok) {
+                  setPostText("");
+                  setPostImage(null);
+                  setFileInputKey(k => k + 1);
+                  flash("✓ Posted to the feed");
+                  loadPosts();
+                } else {
+                  flash(`Failed: ${r.error ?? "unknown error"}`);
+                }
+              } finally {
+                setPosting(false);
+              }
+            }}
+          >
+            {posting ? "Posting…" : "Post to feed"}
+          </button>
+        </div>
+        {posts.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">Recent posts</div>
+            {posts.map(p => (
+              <div key={p.id} className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] px-3 py-2 text-sm">
+                {p.imageUrl && <img src={p.imageUrl} alt="" className="h-8 w-8 rounded object-cover flex-shrink-0" />}
+                <span className="flex-1 truncate">{p.text || "(image)"}</span>
+                <button
+                  className="text-xs text-red-300 hover:text-red-200"
+                  onClick={async () => {
+                    if (!window.confirm("Delete this post?")) return;
+                    const r = await deleteFeedPost(p.id);
+                    if (r.ok) { flash("✓ Post deleted"); loadPosts(); }
+                    else flash(`Failed: ${r.error ?? "unknown error"}`);
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Fill-in teams */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Fill-in teams</h2>
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          {(league?.users.filter(u => !u.isBot).length ?? 0)} of 16 spots are real teams. If fewer than 16 people
+          sign up by the lock-in deadline, the rest are filled with “Random Not Human FC” bots that make random
+          predictions. This runs automatically at the deadline — use the button to do it now. Does nothing once 16 real teams exist.
+        </p>
+        <button
+          className="btn-primary px-4 py-2 text-sm"
+          disabled={filling}
+          onClick={async () => {
+            setFilling(true);
+            try {
+              const r = await fillTeams();
+              flash(
+                r.ok
+                  ? (r.created ? `✓ Created ${r.created} fill-in team(s)` : "Already 16 teams — nothing to do.")
+                  : `Failed: ${r.error ?? "unknown error"}`,
+              );
+            } finally {
+              setFilling(false);
+            }
+          }}
+        >
+          {filling ? "Creating…" : "Generate fill-in teams"}
+        </button>
+      </section>
 
       {/* Predict for a user */}
       <section className="card p-4">

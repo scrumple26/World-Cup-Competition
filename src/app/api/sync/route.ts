@@ -3,6 +3,7 @@ import { getFixtures, getStandings } from "@/lib/apiFootball";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toWcMatch, toGroupStandings } from "@/lib/wcMap";
 import { recomputeAllScores, autoFillMissingPredictions } from "@/lib/serverScoring";
+import { ensureFillTeams } from "@/lib/bots";
 import { generateFeedEntries } from "@/lib/feedGen";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
 
@@ -85,6 +86,20 @@ async function handle(req: NextRequest) {
     // 5. Auto-fill missing predictions for any match whose kickoff has passed
     const wcMatches = fixtures.map(toWcMatch);
     const autoFilled = await autoFillMissingPredictions(db, wcMatches);
+
+    // 5b. Once the lock-in deadline (first group-stage kickoff) has passed, fill
+    //     any empty roster spots with random bot teams so the field has 16.
+    try {
+      const firstKickoff = wcMatches
+        .filter((m) => m.round.startsWith("Group Stage"))
+        .map((m) => m.kickoff)
+        .sort()[0];
+      if (firstKickoff && new Date().toISOString() >= firstKickoff) {
+        await ensureFillTeams(db);
+      }
+    } catch (e) {
+      console.error("[sync] fill-teams failed:", e);
+    }
 
     // 6. Generate feed entries for matches that just became FT/AET/PEN this sync
     const playedStatuses = new Set(["FT", "AET", "PEN"]);

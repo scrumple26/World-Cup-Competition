@@ -24,6 +24,16 @@ export interface FeedLateDrama {
   gainedOutcome: string[];
 }
 
+/** A free-form post authored by the admin (text and/or image). */
+export interface FeedPost {
+  id: string;
+  text: string;
+  imageUrl?: string;
+  authorUid: string;
+  authorName: string;
+  createdAt: string; // ISO
+}
+
 export interface FeedEntry {
   fixtureId: number;
   kickoff: string; // ISO

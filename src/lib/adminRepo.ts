@@ -20,6 +20,8 @@ export interface AdminResult {
   matchesSynced?: number;
   groupsSynced?: number;
   usersScored?: number;
+  // Fill-teams detail
+  created?: number;
 }
 
 async function post(path: string, body: unknown): Promise<AdminResult> {
@@ -36,6 +38,7 @@ async function post(path: string, body: unknown): Promise<AdminResult> {
     matchesSynced: data.matchesSynced as number | undefined,
     groupsSynced: data.groupsSynced as number | undefined,
     usersScored: data.usersScored as number | undefined,
+    created: data.created as number | undefined,
   };
 }
 
@@ -66,6 +69,38 @@ export async function overrideResult(args: {
 export async function syncNow(): Promise<AdminResult> {
   if (USE_MOCK) return { ok: true, mock: true };
   return post("/api/sync", {});
+}
+
+export async function fillTeams(): Promise<AdminResult> {
+  if (USE_MOCK) return { ok: true, mock: true };
+  return post("/api/admin/fill-teams", {});
+}
+
+export async function createFeedPost(text: string, image: File | null): Promise<AdminResult> {
+  if (USE_MOCK) return { ok: true, mock: true };
+  const token = await adminToken();
+  const form = new FormData();
+  form.append("text", text);
+  if (image) form.append("image", image);
+  const res = await fetch("/api/feed/post", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({})) as { error?: string };
+  return { ok: res.ok, error: data.error };
+}
+
+export async function deleteFeedPost(id: string): Promise<AdminResult> {
+  if (USE_MOCK) return { ok: true, mock: true };
+  const token = await adminToken();
+  const res = await fetch("/api/feed/post", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ id }),
+  });
+  const data = await res.json().catch(() => ({})) as { error?: string };
+  return { ok: res.ok, error: data.error };
 }
 
 export async function removeUser(uid: string): Promise<AdminResult> {

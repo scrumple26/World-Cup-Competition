@@ -16,11 +16,12 @@ export async function GET(req: NextRequest) {
   const db = getAdminDb();
   if (!db) return NextResponse.json({ matches: {}, groups: {}, third: { advancing: [] } });
 
-  const [mSnap, gSnap, tSnap, lockSnap] = await Promise.all([
+  const [mSnap, gSnap, tSnap, lockSnap, draftSnap] = await Promise.all([
     db.collection("predictions").doc(uid).collection("matches").get(),
     db.collection("predictions").doc(uid).collection("groups").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("thirdPlace").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("userLock").get(),
+    db.collection("predictions").doc(uid).collection("meta").doc("draft").get(),
   ]);
 
   const matches: Record<number, MatchPrediction> = {};
@@ -39,7 +40,9 @@ export async function GET(req: NextRequest) {
     ? (tSnap.data() as ThirdPlacePrediction)
     : { advancing: [] };
 
-  return NextResponse.json({ matches, groups, third, userLocked: lockSnap.exists });
+  const draft = draftSnap.exists ? draftSnap.data() : null;
+
+  return NextResponse.json({ matches, groups, third, userLocked: lockSnap.exists, draft });
 }
 
 /**
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => ({}))) as {
-    type?: "match" | "group" | "third";
+    type?: "match" | "group" | "third" | "draft";
     payload?: unknown;
   };
 
@@ -80,6 +83,9 @@ export async function POST(req: NextRequest) {
     } else if (body.type === "third") {
       const p = body.payload as ThirdPlacePrediction;
       await predRef.collection("meta").doc("thirdPlace").set(p);
+    } else if (body.type === "draft") {
+      // Cross-device soft-save: the full in-progress draft, synced per user.
+      await predRef.collection("meta").doc("draft").set(body.payload as object);
     } else {
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }

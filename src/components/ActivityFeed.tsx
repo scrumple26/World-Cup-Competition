@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { FeedEntry, PerUserMatchResult } from "@/lib/feedTypes";
+import type { FeedEntry, FeedPost, PerUserMatchResult } from "@/lib/feedTypes";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -190,16 +190,39 @@ function FeedCard({ entry, myUid, spoilerMode }: { entry: FeedEntry; myUid?: str
   );
 }
 
+// ── PostCard (admin posts) ───────────────────────────────────────────────────
+
+function PostCard({ post }: { post: FeedPost }) {
+  const dateStr = new Date(post.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return (
+    <div className="card overflow-hidden border-[var(--accent)]/40">
+      <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--accent)]/5 px-4 py-2.5">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent)]">
+          📣 {post.authorName}
+        </span>
+        <span className="ml-auto text-xs text-[var(--muted)]">{dateStr}</span>
+      </div>
+      {post.text && (
+        <p className="whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed">{post.text}</p>
+      )}
+      {post.imageUrl && (
+        <img src={post.imageUrl} alt="" className="max-h-[28rem] w-full object-cover" />
+      )}
+    </div>
+  );
+}
+
 // ── ActivityFeed ─────────────────────────────────────────────────────────────
 
 export function ActivityFeed({ myUid, overallLeader, spoilerMode }: { myUid?: string; overallLeader?: { teamName: string; uid: string }; spoilerMode?: boolean }) {
   const [entries, setEntries] = useState<FeedEntry[]>([]);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/feed")
       .then((r) => r.json())
-      .then((d) => setEntries(d.entries ?? []))
+      .then((d) => { setEntries(d.entries ?? []); setPosts(d.posts ?? []); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -210,13 +233,19 @@ export function ActivityFeed({ myUid, overallLeader, spoilerMode }: { myUid?: st
     );
   }
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && posts.length === 0) {
     return (
       <div className="card p-4 text-sm text-[var(--muted)]">
         Activity will appear here once matches are played and scored.
       </div>
     );
   }
+
+  // Merge admin posts and match entries into one stream, newest first.
+  const items = [
+    ...posts.map((p) => ({ kind: "post" as const, t: p.createdAt, post: p })),
+    ...entries.map((e) => ({ kind: "match" as const, t: e.createdAt ?? e.kickoff, entry: e })),
+  ].sort((a, b) => (a.t < b.t ? 1 : a.t > b.t ? -1 : 0));
 
   return (
     <div className="space-y-3">
@@ -231,9 +260,13 @@ export function ActivityFeed({ myUid, overallLeader, spoilerMode }: { myUid?: st
           </span>
         </div>
       )}
-      {entries.map((e) => (
-        <FeedCard key={e.fixtureId} entry={e} myUid={myUid} spoilerMode={spoilerMode} />
-      ))}
+      {items.map((it) =>
+        it.kind === "post" ? (
+          <PostCard key={`post-${it.post.id}`} post={it.post} />
+        ) : (
+          <FeedCard key={`match-${it.entry.fixtureId}`} entry={it.entry} myUid={myUid} spoilerMode={spoilerMode} />
+        ),
+      )}
     </div>
   );
 }

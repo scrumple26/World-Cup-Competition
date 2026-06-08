@@ -15,6 +15,8 @@ export interface UserProfile {
   hideScores?: boolean;
   friendGroup: FriendGroup;
   isAdmin: boolean;
+  /** True for auto-generated "Random Not Human FC" fill-in teams. */
+  isBot?: boolean;
   createdAt: number;
 }
 

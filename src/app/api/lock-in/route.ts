@@ -53,5 +53,8 @@ export async function POST(req: NextRequest) {
     lockedAt: Date.now(),
   });
 
+  // Clear the cross-device draft now that picks are committed.
+  await db.collection("predictions").doc(uid).collection("meta").doc("draft").delete().catch(() => {});
+
   return NextResponse.json({ ok: true, count: predictions.length });
 }

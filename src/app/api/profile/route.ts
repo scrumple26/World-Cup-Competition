@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { assignFriendGroup, groupCounts } from "@/lib/groups";
 import { ADMIN_EMAIL } from "@/lib/config";
+import { sendSignupNotification } from "@/lib/email";
 import type { FriendGroup, UserProfile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +93,14 @@ export async function POST(req: NextRequest) {
     createdAt: Date.now(),
   };
   await ref.set(profile);
+
+  // Notify the admin a new player joined (non-fatal — never block sign-up).
+  try {
+    await sendSignupNotification({
+      firstName, lastName, teamName, email, friendGroup,
+    });
+  } catch { /* non-fatal */ }
+
   return NextResponse.json(profile);
 }
 

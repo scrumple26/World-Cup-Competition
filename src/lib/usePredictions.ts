@@ -17,6 +17,8 @@ interface PendingStore {
   groups:                Record<string, GroupPrediction>;
   thirdPlace:            number[];
   thirdPlaceOverridden?: boolean;
+  /** Last write time — used to reconcile local vs server draft across devices. */
+  updatedAt?:            number;
 }
 
 function lsKey(uid: string) { return `pred_pending_${uid}`; }
@@ -30,7 +32,24 @@ function loadPending(uid: string): PendingStore {
 }
 
 function savePending(uid: string, store: PendingStore) {
-  try { localStorage.setItem(lsKey(uid), JSON.stringify(store)); } catch { /* ignore */ }
+  try { localStorage.setItem(lsKey(uid), JSON.stringify({ ...store, updatedAt: Date.now() })); } catch { /* ignore */ }
+}
+
+/** Push the full draft to the server so soft-saved picks carry across devices. */
+async function postDraft(store: PendingStore) {
+  try {
+    const { getClientAuth } = await import("./firebase/client");
+    const auth = getClientAuth();
+    if (!auth) return;
+    try { await auth.authStateReady(); } catch { /* non-fatal */ }
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) return;
+    await fetch("/api/predictions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ type: "draft", payload: { ...store, updatedAt: Date.now() } }),
+    });
+  } catch { /* non-fatal */ }
 }
 
 function clearPending(uid: string) {
@@ -49,6 +68,7 @@ export function usePredictions(
   uid: string | undefined,
   groups: GroupBundle[],
   deadline?: string | null,
+  syncDrafts = true,
 ) {
   const [matches,    setMatches]    = useState<Record<number, MatchPrediction>>({});
   const [groupOrders,setGroupOrders] = useState<Record<string, number[]>>({});
@@ -106,7 +126,30 @@ export function usePredictions(
           setThirdPlaceState((d.third as ThirdPlacePrediction)?.advancing ?? []);
           clearPending(uid);
         } else {
-          const pending = loadPending(uid);
+          const localPending = loadPending(uid);
+          const serverDraft = (d.draft ?? null) as PendingStore | null;
+          const hasContent = (s: PendingStore | null) =>
+            !!s && (Object.keys(s.matches ?? {}).length > 0
+              || Object.keys(s.groups ?? {}).length > 0
+              || (s.thirdPlace ?? []).length > 0);
+          // Cross-device: prefer whichever draft is newer; else whichever has content.
+          let chosen: PendingStore;
+          if (hasContent(serverDraft) && hasContent(localPending)) {
+            chosen = (serverDraft!.updatedAt ?? 0) >= (localPending.updatedAt ?? 0)
+              ? serverDraft! : localPending;
+          } else if (hasContent(serverDraft)) {
+            chosen = serverDraft!;
+          } else {
+            chosen = localPending;
+          }
+          const pending: PendingStore = {
+            matches: chosen.matches ?? {},
+            groups: chosen.groups ?? {},
+            thirdPlace: chosen.thirdPlace ?? [],
+            thirdPlaceOverridden: chosen.thirdPlaceOverridden,
+          };
+          // Keep this device's localStorage in sync with the chosen draft.
+          savePending(uid, pending);
           const mergedMatches = { ...(d.matches ?? {}), ...pending.matches };
           setMatches(mergedMatches);
 
@@ -302,6 +345,18 @@ export function usePredictions(
     void lockInRef.current();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPastDeadline, isUserLocked, loaded, uid]);
+
+  // ---- cross-device draft sync: debounce-save the full draft to the server ----
+  useEffect(() => {
+    if (!syncDrafts || !uid || !loaded || isLocked) return;
+    const groupsRec: Record<string, GroupPrediction> = {};
+    for (const [g, order] of Object.entries(groupOrders)) {
+      groupsRec[g] = { group: g, order, ...(groupOverridden[g] ? { overridden: true } : {}) };
+    }
+    const store: PendingStore = { matches, groups: groupsRec, thirdPlace, thirdPlaceOverridden };
+    const t = setTimeout(() => { void postDraft(store); }, 1000);
+    return () => clearTimeout(t);
+  }, [syncDrafts, uid, loaded, isLocked, matches, groupOrders, groupOverridden, thirdPlace, thirdPlaceOverridden]);
 
   const pendingCount = useMemo(() => {
     if (!uid || isLocked) return 0;
