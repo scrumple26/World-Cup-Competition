@@ -10,9 +10,10 @@ export async function GET() {
   const db = getAdminDb();
   if (!db) return NextResponse.json({ users: [], scores: {} });
 
-  const [uSnap, sSnap] = await Promise.all([
+  const [uSnap, sSnap, mSnap] = await Promise.all([
     db.collection("users").get(),
     db.collection("scores").get(),
+    db.collection("wcMatches").get(),
   ]);
 
   const users = uSnap.docs.map((d) => d.data() as UserProfile);
@@ -28,5 +29,12 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ users, scores });
+  const playedStatuses = new Set(["FT", "AET", "PEN"]);
+  let playedMatchCount = 0;
+  const totalMatchCount = mSnap.size;
+  for (const d of mSnap.docs) {
+    if (playedStatuses.has((d.data() as { status: string }).status)) playedMatchCount++;
+  }
+
+  return NextResponse.json({ users, scores, playedMatchCount, totalMatchCount });
 }

@@ -98,6 +98,8 @@ export interface ScoreDoc {
   /** Outcome accuracy (correct H/D/A out of total predictions made). */
   outcomesCorrect?: number;
   outcomesTotal?: number;
+  /** At least one of home/away score was exactly correct. */
+  partialScoreCorrect?: number;
   /** Time series for the cumulative chart. */
   history: { date: string; total: number }[];
 }

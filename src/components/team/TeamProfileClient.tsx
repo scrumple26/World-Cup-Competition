@@ -226,8 +226,8 @@ export function TeamProfileClient({ uid }: { uid: string }) {
           <h2 className="mb-3 font-semibold">Preferences</h2>
           <label className="flex cursor-pointer items-center justify-between">
             <div>
-              <div className="text-sm font-medium">Hide scores in Schedule</div>
-              <div className="text-xs text-[var(--muted)]">Shows LIVE/FT without the actual score</div>
+              <div className="text-sm font-medium">Spoiler protection</div>
+              <div className="text-xs text-[var(--muted)]">Hides real game results in the schedule and activity feed — click any result to reveal it</div>
             </div>
             <HideScoresToggle current={p.hideScores ?? false} onToggle={refreshProfile} />
           </label>

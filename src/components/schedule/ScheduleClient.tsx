@@ -63,6 +63,7 @@ export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean })
   const { user } = useAuth();
   const [filter, setFilter] = useState<Filter>("all");
   const [live, setLive] = useState<Record<number, WcMatch>>({});
+  const [revealedIds, setRevealedIds] = useState<Set<number>>(new Set());
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [liveDetails, setLiveDetails] = useState<Record<number, LiveMatchDetails>>({});
   const [predsId, setPredsId] = useState<number | null>(null);
@@ -155,7 +156,7 @@ export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean })
         {!hideFilter && <h1 className="text-2xl font-bold">Schedule</h1>}
         <div className="flex items-center gap-3">
           {hideScores && (
-            <span className="text-xs text-amber-400/80">Scores hidden</span>
+            <span className="text-xs text-amber-400/80">Spoiler protection on</span>
           )}
           {!hideFilter && <div className="flex gap-1 rounded-lg border border-[var(--border)] p-1">
             {FILTERS.map(([val, label]) => (
@@ -193,7 +194,8 @@ export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean })
                 <div key={m.id}>
                   <MatchRow
                     match={display}
-                    hideScores={hideScores}
+                    hideScores={hideScores && !revealedIds.has(m.id)}
+                    onReveal={() => setRevealedIds((prev) => new Set([...prev, m.id]))}
                     expanded={expandedId === m.id || predsId === m.id}
                     onExpand={isLiveMatch ? () => toggleExpand(m.id) : () => togglePreds(m.id)}
                   />
@@ -225,11 +227,13 @@ export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean })
 function MatchRow({
   match: m,
   hideScores,
+  onReveal,
   expanded,
   onExpand,
 }: {
   match: WcMatch;
   hideScores: boolean;
+  onReveal?: () => void;
   expanded?: boolean;
   onExpand?: () => void;
 }) {
@@ -247,7 +251,7 @@ function MatchRow({
       </div>
 
       <div className="flex w-28 flex-col items-center gap-0.5">
-        <ScoreOrTime match={m} played={played} live={isLive} hideScores={hideScores} />
+        <ScoreOrTime match={m} played={played} live={isLive} hideScores={hideScores} onReveal={onReveal} />
         <span className="text-[10px] text-[var(--muted)]">{normalizeRound(m.round)}</span>
       </div>
 
@@ -268,9 +272,9 @@ function Flag({ src, alt }: { src: string; alt: string }) {
 }
 
 function ScoreOrTime({
-  match: m, played, live, hideScores,
+  match: m, played, live, hideScores, onReveal,
 }: {
-  match: WcMatch; played: boolean; live: boolean; hideScores: boolean;
+  match: WcMatch; played: boolean; live: boolean; hideScores: boolean; onReveal?: () => void;
 }) {
   if (live) {
     const min = m.elapsed != null ? `${m.elapsed}'` : (m.status === "HT" ? "HT" : "");
@@ -301,7 +305,16 @@ function ScoreOrTime({
   if (played) {
     if (hideScores) {
       const tag = m.status === "AET" ? "AET" : m.status === "PEN" ? "PEN" : "FT";
-      return <span className="text-xs font-semibold text-[var(--muted)]">{tag}</span>;
+      return (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onReveal?.(); }}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--border)] hover:text-[var(--fg)] transition"
+          title="Click to reveal score"
+        >
+          {tag} <span className="opacity-50">👁</span>
+        </button>
+      );
     }
     const tag = m.status === "AET" ? "AET" : m.status === "PEN" ? "PEN" : null;
     return (

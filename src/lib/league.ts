@@ -98,6 +98,53 @@ export function buildRankSeries(
   return { data, keys: users.map((u) => u.teamName) };
 }
 
+export interface ProjectionRow {
+  uid: string;
+  teamName: string;
+  logoUrl?: string;
+  current: number;
+  projectedGain: number;
+  projectedTotal: number;
+  projectedRank: number;
+  qualified: boolean;
+}
+
+/**
+ * Project each player's final score based on their points-per-match rate.
+ * Input rows are a single friend-group (already ranked by current score).
+ * Returns the same players sorted by projected total descending, top 2 marked as qualifying.
+ */
+export function buildProjectionRows(
+  rows: RankedRow[],
+  playedMatchCount: number,
+  totalMatchCount: number,
+): ProjectionRow[] {
+  const remaining = Math.max(0, totalMatchCount - playedMatchCount);
+
+  const projected = rows.map((r): ProjectionRow => {
+    const ppm = playedMatchCount > 0 ? r.score.total / playedMatchCount : 0;
+    const gain = Math.round(ppm * remaining * 10) / 10;
+    return {
+      uid: r.user.uid,
+      teamName: r.user.teamName,
+      logoUrl: r.user.logoUrl,
+      current: r.score.total,
+      projectedGain: gain,
+      projectedTotal: r.score.total + gain,
+      projectedRank: 0,
+      qualified: false,
+    };
+  });
+
+  projected.sort((a, b) => b.projectedTotal - a.projectedTotal);
+  projected.forEach((r, i) => {
+    r.projectedRank = i + 1;
+    r.qualified = i < 2;
+  });
+
+  return projected;
+}
+
 /**
  * Build cumulative-points-over-time chart rows from members' score histories.
  * Dates are unioned in first-seen order; missing points carry forward.

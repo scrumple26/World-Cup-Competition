@@ -3,6 +3,7 @@ import { getFixtures, getStandings } from "@/lib/apiFootball";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { toWcMatch, toGroupStandings } from "@/lib/wcMap";
 import { recomputeAllScores, autoFillMissingPredictions } from "@/lib/serverScoring";
+import { generateFeedEntries } from "@/lib/feedGen";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
 
 export const dynamic = "force-dynamic";
@@ -49,10 +50,11 @@ async function handle(req: NextRequest) {
     //    avoiding 104 sequential reads inside the batch loop.
     const existingSnap = await db.collection("wcMatches").get();
     const manualOverrides = new Set<string>();
+    const prevStatuses = new Map<string, string>();
     for (const d of existingSnap.docs) {
-      if ((d.data() as { manualOverride?: boolean }).manualOverride) {
-        manualOverrides.add(d.id);
-      }
+      const data = d.data() as { manualOverride?: boolean; status?: string };
+      if (data.manualOverride) manualOverrides.add(d.id);
+      if (data.status) prevStatuses.set(d.id, data.status);
     }
 
     // 3. Write fixtures → wcMatches (skip manual overrides)
@@ -84,7 +86,15 @@ async function handle(req: NextRequest) {
     const wcMatches = fixtures.map(toWcMatch);
     const autoFilled = await autoFillMissingPredictions(db, wcMatches);
 
-    // 6. Recompute everyone's scores from the latest results
+    // 6. Generate feed entries for matches that just became FT/AET/PEN this sync
+    const playedStatuses = new Set(["FT", "AET", "PEN"]);
+    const newlyCompleted = wcMatches.filter(
+      (m) => playedStatuses.has(m.status) && !playedStatuses.has(prevStatuses.get(String(m.id)) ?? ""),
+    );
+    const usersSnap = await db.collection("users").get();
+    const feedCount = await generateFeedEntries(db, newlyCompleted, usersSnap);
+
+    // 7. Recompute everyone's scores from the latest results
     const scored = await recomputeAllScores(db);
 
     return NextResponse.json({
@@ -92,6 +102,7 @@ async function handle(req: NextRequest) {
       matchesSynced: matchWrites,
       groupsSynced: standings.length,
       autoFilled,
+      feedEntries: feedCount,
       usersScored: scored,
     });
   } catch (err) {

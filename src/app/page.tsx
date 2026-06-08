@@ -8,6 +8,7 @@ import { buildGroupStandings } from "@/lib/league";
 import { FRIEND_GROUPS } from "@/lib/wc";
 import { displayName } from "@/lib/types";
 import type { WeeklyMessage } from "@/app/api/config/weekly-message/route";
+import { ActivityFeed } from "@/components/ActivityFeed";
 
 const CARDS = [
   { href: "/predictions", emoji: "📝", title: "Predictions",  desc: "Pick scores, group finishes & who advances." },
@@ -88,6 +89,16 @@ export default function Home() {
     () => league ? buildGroupStandings(league.users, league.scores) : null,
     [league],
   );
+
+  // Overall leader (for feed banner)
+  const overallLeader = useMemo(() => {
+    if (!league?.users.length) return undefined;
+    const sorted = [...league.users].sort(
+      (a, b) => (league.scores[b.uid]?.total ?? 0) - (league.scores[a.uid]?.total ?? 0),
+    );
+    const leader = sorted[0];
+    return leader ? { uid: leader.uid, teamName: leader.teamName } : undefined;
+  }, [league]);
 
   return (
     <div className="space-y-5">
@@ -193,6 +204,12 @@ export default function Home() {
           <p className="mt-1.5 text-[10px] text-[var(--muted)]">● = projects to qualify · red = your row</p>
         </div>
       )}
+
+      {/* Activity feed */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-[var(--muted)]">Recent Activity</h2>
+        <ActivityFeed myUid={user?.uid} overallLeader={overallLeader} spoilerMode={user?.hideScores} />
+      </div>
 
       {/* Quick nav */}
       <div className="grid gap-4 sm:grid-cols-3">

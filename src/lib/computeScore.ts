@@ -38,6 +38,7 @@ export interface UserScore {
   perfectGroups: number;
   outcomesCorrect: number;
   outcomesTotal: number;
+  partialScoreCorrect: number;
 }
 
 export function computeUserScore(
@@ -50,6 +51,7 @@ export function computeUserScore(
   let perfectGroups = 0;
   let outcomesCorrect = 0;
   let outcomesTotal = 0;
+  let partialScoreCorrect = 0;
 
   // 1. Match results (group + knockout share the same scoring)
   for (const m of actual.matches) {
@@ -66,6 +68,7 @@ export function computeUserScore(
     if (b.perfect) perfectScores++;
     outcomesTotal++;
     if (b.outcome > 0) outcomesCorrect++;
+    if (p.home === m.home || p.away === m.away) partialScoreCorrect++;
   }
 
   // 2. Group finishes (only for completed groups)
@@ -90,5 +93,6 @@ export function computeUserScore(
     perfectGroups,
     outcomesCorrect,
     outcomesTotal,
+    partialScoreCorrect,
   };
 }

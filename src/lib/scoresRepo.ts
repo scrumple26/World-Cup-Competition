@@ -22,6 +22,8 @@ function zeroScore(uid: string): ScoreDoc {
 export interface LeagueData {
   users: UserProfile[];
   scores: Record<string, ScoreDoc>;
+  playedMatchCount: number;
+  totalMatchCount: number;
 }
 
 export async function loadLeague(): Promise<LeagueData> {
@@ -29,10 +31,10 @@ export async function loadLeague(): Promise<LeagueData> {
     const users = getAllUsers();
     const scores: Record<string, ScoreDoc> = {};
     for (const u of users) scores[u.uid] = SEED_SCORES[u.uid] ?? zeroScore(u.uid);
-    return { users, scores };
+    return { users, scores, playedMatchCount: 0, totalMatchCount: 104 };
   }
 
   const res = await fetch("/api/league");
-  if (!res.ok) return { users: [], scores: {} };
+  if (!res.ok) return { users: [], scores: {}, playedMatchCount: 0, totalMatchCount: 104 };
   return res.json() as Promise<LeagueData>;
 }

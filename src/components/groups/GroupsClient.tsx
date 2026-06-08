@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
-import { buildGroupStandings, buildChartSeries } from "@/lib/league";
+import { buildGroupStandings, buildChartSeries, buildProjectionRows } from "@/lib/league";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import { StandingsTable } from "../StandingsTable";
 import { CumulativeChart } from "../CumulativeChart";
+import { ProjectionChart } from "../ProjectionChart";
 
 export function GroupsClient() {
   const { user } = useAuth();
@@ -52,6 +53,7 @@ export function GroupsClient() {
           const series = buildChartSeries(
             rows.map((r) => ({ teamName: r.user.teamName, history: r.score.history })),
           );
+          const projRows = buildProjectionRows(rows, data.playedMatchCount, data.totalMatchCount);
           return (
             <section key={g} className="card p-4">
               <div className="mb-3 flex items-center gap-2">
@@ -68,6 +70,14 @@ export function GroupsClient() {
               <div className="mt-4">
                 <div className="label">Cumulative points over time</div>
                 <CumulativeChart series={series} />
+              </div>
+              <div className="mt-5">
+                <div className="label mb-2">Projected final standings</div>
+                <ProjectionChart
+                  rows={projRows}
+                  playedMatchCount={data.playedMatchCount}
+                  totalMatchCount={data.totalMatchCount}
+                />
               </div>
             </section>
           );
