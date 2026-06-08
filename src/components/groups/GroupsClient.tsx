@@ -8,6 +8,7 @@ import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import { StandingsTable } from "../StandingsTable";
 import { CumulativeChart } from "../CumulativeChart";
 import { ProjectionChart } from "../ProjectionChart";
+import { WinProbabilityChart } from "../WinProbabilityChart";
 
 export function GroupsClient() {
   const { user } = useAuth();
@@ -77,6 +78,15 @@ export function GroupsClient() {
                   rows={projRows}
                   playedMatchCount={data.playedMatchCount}
                   totalMatchCount={data.totalMatchCount}
+                />
+              </div>
+              <div className="mt-5">
+                <div className="label mb-2">Win probability</div>
+                <WinProbabilityChart
+                  rows={rows}
+                  playedMatchCount={data.playedMatchCount}
+                  totalMatchCount={data.totalMatchCount}
+                  highlightUid={user?.uid}
                 />
               </div>
             </section>
