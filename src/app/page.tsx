@@ -9,6 +9,7 @@ import { FRIEND_GROUPS } from "@/lib/wc";
 import { displayName } from "@/lib/types";
 import type { WeeklyMessage } from "@/app/api/config/weekly-message/route";
 import { ActivityFeed } from "@/components/ActivityFeed";
+import type { FeedEntry } from "@/lib/feedTypes";
 
 const CARDS = [
   { href: "/predictions", emoji: "📝", title: "Predictions",  desc: "Pick scores, group finishes & who advances." },
@@ -50,11 +51,19 @@ export default function Home() {
   const { user } = useAuth();
   const { data: league } = useLeague();
   const [weeklyMsg, setWeeklyMsg] = useState<WeeklyMessage | null>(null);
+  const [feedEntries, setFeedEntries] = useState<FeedEntry[]>([]);
 
   useEffect(() => {
     fetch("/api/config/weekly-message")
       .then(r => r.json())
       .then(setWeeklyMsg)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/feed")
+      .then(r => r.json())
+      .then(d => setFeedEntries(d.entries ?? []))
       .catch(() => {});
   }, []);
 
@@ -83,6 +92,23 @@ export default function Home() {
     }).sort((a, b) => b.jump - a.jump);
     return ranked[0]?.jump > 0 ? ranked[0] : null;
   }, [league]);
+
+  // Hot Hand — most points in last 5 scored matches
+  const hotHand = useMemo(() => {
+    if (!feedEntries.length || !league) return null;
+    const last5 = feedEntries.slice(0, 5);
+    const totals: Record<string, { uid: string; pts: number }> = {};
+    for (const entry of last5) {
+      for (const u of entry.perUser) {
+        totals[u.uid] = { uid: u.uid, pts: (totals[u.uid]?.pts ?? 0) + u.pts };
+      }
+    }
+    const ranked = Object.values(totals).sort((a, b) => b.pts - a.pts);
+    const top = ranked[0];
+    if (!top || top.pts === 0) return null;
+    const profile = league.users.find(u => u.uid === top.uid);
+    return profile ? { user: profile, pts: top.pts, matchCount: last5.length } : null;
+  }, [feedEntries, league]);
 
   // Competition groups
   const groupStandings = useMemo(
@@ -119,9 +145,9 @@ export default function Home() {
           Group <b>{user?.friendGroup}</b> · Lock in your predictions before each kickoff.
         </p>
 
-        {/* Player of the Week + Biggest Jump side by side */}
-        {(potw || bigJump) && (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {/* Player of the Week + Biggest Jump + Hot Hand */}
+        {(potw || bigJump || hotHand) && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {potw && (
               <div className="flex items-center gap-3 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 px-4 py-3">
                 {potw.user.logoUrl ? (
@@ -157,6 +183,25 @@ export default function Home() {
                     {bigJump.user.uid === user?.uid && <span className="ml-1 text-xs font-normal text-[var(--muted)]">you!</span>}
                   </Link>
                   <div className="text-xs text-[var(--muted)]">{bigJump.user.teamName} · +{bigJump.jump} pts yesterday</div>
+                </div>
+              </div>
+            )}
+            {hotHand && (
+              <div className="flex items-center gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-3">
+                {hotHand.user.logoUrl ? (
+                  <img src={hotHand.user.logoUrl} alt="" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg-elev)] text-xs font-bold text-[var(--muted)] flex-shrink-0">
+                    {hotHand.user.teamName.charAt(0)}
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-orange-400">🔥 Hot Hand</div>
+                  <Link href={`/team/${hotHand.user.uid}`} className="truncate font-bold hover:underline block">
+                    {displayName(hotHand.user)}
+                    {hotHand.user.uid === user?.uid && <span className="ml-1 text-xs font-normal text-[var(--muted)]">you!</span>}
+                  </Link>
+                  <div className="text-xs text-[var(--muted)]">{hotHand.user.teamName} · +{hotHand.pts} pts last {hotHand.matchCount} games</div>
                 </div>
               </div>
             )}
