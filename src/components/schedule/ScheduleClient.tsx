@@ -69,6 +69,8 @@ export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean })
   const [predsId, setPredsId] = useState<number | null>(null);
   const [matchPreds, setMatchPreds] = useState<Record<number, MatchPredictionEntry[]>>({});
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // IDs of matches already known to be done — so we only trigger sync on NEW completions
+  const triggeredSyncIds = useRef<Set<number>>(new Set());
   const hideScores = user?.hideScores ?? false;
 
   // Fetch detailed live data for the expanded match
@@ -93,14 +95,25 @@ export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean })
     } catch { /* silent */ }
   }
 
-  // Toggle expanded match; fetch details immediately
+  // Toggle expanded match; fetch details + predictions immediately
   function toggleExpand(id: number) {
     setExpandedId((prev) => {
       const next = prev === id ? null : id;
-      if (next !== null) fetchDetails(next);
+      if (next !== null) {
+        fetchDetails(next);
+        if (!matchPreds[next]) togglePreds(next);
+      }
       return next;
     });
   }
+
+  // Seed triggeredSyncIds with already-finished matches so we don't re-fire on load
+  useEffect(() => {
+    if (!wc) return;
+    triggeredSyncIds.current = new Set(
+      wc.fixtures.filter((m) => DONE_STATUSES.has(m.status)).map((m) => m.id),
+    );
+  }, [wc]);
 
   // Score polling effect
   useEffect(() => {
@@ -114,6 +127,23 @@ export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean })
         const res = await fetch(`/api/wc/live?ids=${ids.join(",")}`);
         if (!res.ok) return;
         const data = await res.json() as { matches: WcMatch[] };
+
+        // Detect matches that just crossed the finish line this poll cycle
+        let justFinished: number | null = null;
+        for (const m of data.matches) {
+          if (DONE_STATUSES.has(m.status) && !triggeredSyncIds.current.has(m.id)) {
+            triggeredSyncIds.current.add(m.id);
+            justFinished = m.id;
+          }
+        }
+        if (justFinished !== null) {
+          fetch("/api/sync/post-match", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fixtureId: justFinished }),
+          }).catch(() => {});
+        }
+
         setLive((prev) => {
           const next = { ...prev };
           for (const m of data.matches) next[m.id] = m;
@@ -201,8 +231,10 @@ export function ScheduleClient({ hideFilter = false }: { hideFilter?: boolean })
                   />
                   {expandedId === m.id && isLiveMatch && (
                     <LivePanel
+                      match={display}
                       details={liveDetails[m.id] ?? null}
                       hideScores={hideScores}
+                      myPred={matchPreds[m.id]?.find((p) => p.uid === user?.uid) ?? null}
                     />
                   )}
                   {predsId === m.id && !isLiveMatch && (
@@ -346,11 +378,15 @@ const EVENT_ICON: Record<string, string> = {
 };
 
 function LivePanel({
+  match,
   details,
   hideScores,
+  myPred,
 }: {
+  match: WcMatch;
   details: LiveMatchDetails | null;
   hideScores: boolean;
+  myPred: MatchPredictionEntry | null;
 }) {
   if (!details) {
     return (
@@ -362,8 +398,41 @@ function LivePanel({
 
   const events = details.events.filter((e) => e.type !== "other" && e.type !== "sub" || e.type === "sub");
 
+  // Evaluate prediction against current live score (only shown when not spoiler-hidden)
+  const liveHome = match.goals.home;
+  const liveAway = match.goals.away;
+  const predStatus = (() => {
+    if (!myPred || liveHome === null || liveAway === null || hideScores) return null;
+    const perfect = myPred.home === liveHome && myPred.away === liveAway;
+    if (perfect) return { label: "Perfect score so far!", color: "text-[var(--gold)]", icon: "★" };
+    const predOutcome = myPred.home > myPred.away ? "home" : myPred.home < myPred.away ? "away" : "draw";
+    const liveOutcome = liveHome > liveAway ? "home" : liveHome < liveAway ? "away" : "draw";
+    const resultOk = predOutcome === liveOutcome;
+    if (resultOk) return { label: "Result correct — score off", color: "text-[var(--accent)]", icon: "✓" };
+    return { label: "Currently off track", color: "text-[var(--muted)]", icon: "✗" };
+  })();
+
   return (
     <div className="border-t border-[var(--border)] bg-[var(--bg-elev)] px-4 py-3 space-y-3">
+      {/* My prediction status */}
+      {myPred && (
+        <div className="flex items-center gap-3">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)] mb-0.5">Your pick</div>
+            <div className="font-mono font-bold text-sm">{myPred.home} – {myPred.away}</div>
+          </div>
+          {predStatus && (
+            <div className={`flex items-center gap-1.5 text-sm font-semibold ${predStatus.color}`}>
+              <span>{predStatus.icon}</span>
+              <span>{predStatus.label}</span>
+            </div>
+          )}
+          {!predStatus && hideScores && (
+            <div className="text-xs text-[var(--muted)]">Reveal the score to see your status</div>
+          )}
+        </div>
+      )}
+
       {/* Events */}
       {events.length > 0 && (
         <div>
