@@ -24,6 +24,9 @@ export interface AdminResult {
   created?: number;
   // Logo upload detail
   url?: string;
+  // Pick-backup detail
+  backed?: number;
+  skipped?: number;
 }
 
 async function post(path: string, body: unknown): Promise<AdminResult> {
@@ -41,6 +44,8 @@ async function post(path: string, body: unknown): Promise<AdminResult> {
     groupsSynced: data.groupsSynced as number | undefined,
     usersScored: data.usersScored as number | undefined,
     created: data.created as number | undefined,
+    backed: data.backed as number | undefined,
+    skipped: data.skipped as number | undefined,
   };
 }
 
@@ -76,6 +81,11 @@ export async function syncNow(): Promise<AdminResult> {
 export async function fillTeams(): Promise<AdminResult> {
   if (USE_MOCK) return { ok: true, mock: true };
   return post("/api/admin/fill-teams", {});
+}
+
+export async function backupLockedPicks(): Promise<AdminResult> {
+  if (USE_MOCK) return { ok: true, mock: true };
+  return post("/api/admin/backup-picks", {});
 }
 
 export async function uploadTeamLogo(uid: string, file: File): Promise<AdminResult> {

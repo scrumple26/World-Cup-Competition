@@ -323,6 +323,12 @@ export function usePredictions(
         });
       }
 
+      // Snapshot the locked-in picks for safekeeping (non-critical).
+      await fetch("/api/backup-picks", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => { /* never block lock-in */ });
+
       clearPending(uid);
       setIsUserLocked(true);
     } catch (err) {

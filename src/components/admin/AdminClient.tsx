@@ -7,7 +7,7 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { createFeedPost, deleteFeedPost, fillTeams, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 
@@ -28,6 +28,7 @@ export function AdminClient() {
   const [filling, setFilling] = useState(false);
   const [logoOverrides, setLogoOverrides] = useState<Record<string, string>>({});
   const [logoBusyUid, setLogoBusyUid] = useState<string | null>(null);
+  const [backing, setBacking] = useState(false);
 
   // Load current weekly message
   useEffect(() => {
@@ -213,6 +214,34 @@ export function AdminClient() {
           }}
         >
           {filling ? "Creating…" : "Generate fill-in teams"}
+        </button>
+      </section>
+
+      {/* Pick backups */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Pick backups</h2>
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Each player&apos;s picks are snapshotted automatically the moment they lock in. Use this to
+          back-fill a safety copy for everyone who has already locked in. Skips players who already have a backup.
+        </p>
+        <button
+          className="btn-primary px-4 py-2 text-sm"
+          disabled={backing}
+          onClick={async () => {
+            setBacking(true);
+            try {
+              const r = await backupLockedPicks();
+              flash(
+                r.ok
+                  ? `✓ Backed up ${r.backed ?? 0} player(s)${r.skipped ? ` · ${r.skipped} skipped` : ""}`
+                  : `Failed: ${r.error ?? "unknown error"}`,
+              );
+            } finally {
+              setBacking(false);
+            }
+          }}
+        >
+          {backing ? "Backing up…" : "Back up locked-in picks"}
         </button>
       </section>
 
