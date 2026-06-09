@@ -7,8 +7,9 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { createFeedPost, deleteFeedPost, fillTeams, overrideResult, removeUser, setUserGroup, syncNow } from "@/lib/adminRepo";
+import { createFeedPost, deleteFeedPost, fillTeams, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
+import { LogoUpload } from "@/components/LogoUpload";
 
 export function AdminClient() {
   const { user, mockMode } = useAuth();
@@ -25,6 +26,8 @@ export function AdminClient() {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [filling, setFilling] = useState(false);
+  const [logoOverrides, setLogoOverrides] = useState<Record<string, string>>({});
+  const [logoBusyUid, setLogoBusyUid] = useState<string | null>(null);
 
   // Load current weekly message
   useEffect(() => {
@@ -62,6 +65,21 @@ export function AdminClient() {
   function flash(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 5000);
+  }
+
+  async function handleTeamLogo(uid: string, teamName: string, file: File) {
+    setLogoBusyUid(uid);
+    try {
+      const r = await uploadTeamLogo(uid, file);
+      if (r.ok && r.url) {
+        setLogoOverrides((prev) => ({ ...prev, [uid]: r.url as string }));
+        flash(`✓ Updated logo for ${teamName}`);
+      } else {
+        flash(`Failed: ${r.error ?? "unknown error"}`);
+      }
+    } finally {
+      setLogoBusyUid(null);
+    }
   }
 
   if (actAs) {
@@ -354,6 +372,39 @@ export function AdminClient() {
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      {/* Team logos */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Team logos</h2>
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Upload or change the logo for any team on their behalf.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {league?.users.map((u) => {
+            const url = logoOverrides[u.uid] ?? u.logoUrl;
+            return (
+              <div
+                key={u.uid}
+                className="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] px-3 py-2"
+              >
+                {url ? (
+                  <img src={url} alt="" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--border)] text-xs font-bold text-[var(--muted)] flex-shrink-0">
+                    {u.teamName.charAt(0)}
+                  </span>
+                )}
+                <span className="flex-1 truncate text-sm">{u.teamName}</span>
+                <LogoUpload
+                  triggerOnly
+                  uploading={logoBusyUid === u.uid}
+                  onFilePicked={(f) => handleTeamLogo(u.uid, u.teamName, f)}
+                />
+              </div>
+            );
+          })}
         </div>
       </section>
     </div>
