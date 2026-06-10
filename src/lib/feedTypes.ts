@@ -22,6 +22,25 @@ export interface FeedLateDrama {
   lostOutcome: string[];
   /** Players who gained the correct outcome due to this goal. */
   gainedOutcome: string[];
+  /** A VAR decision was involved in the late swing. */
+  varInvolved?: boolean;
+}
+
+/** The three pundit personas. */
+export type PunditSpeaker = "dempsey" | "howard" | "donovan";
+
+/** One turn of pundit-desk dialogue. */
+export interface PunditLine {
+  speaker: PunditSpeaker;
+  text: string;
+}
+
+/** A goal scorer, for commentary on a player's impact. */
+export interface MatchScorer {
+  side: "home" | "away";
+  player: string;
+  minute: number;
+  kind: "goal" | "owngoal" | "penalty";
 }
 
 /** A free-form post authored by the admin (text and/or image). */

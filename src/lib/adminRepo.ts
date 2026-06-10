@@ -4,6 +4,7 @@
 
 import { USE_MOCK } from "./config";
 import type { FriendGroup, Outcome, UserProfile } from "./types";
+import type { PunditLine } from "./feedTypes";
 import { saveUser } from "./mock/store";
 
 async function adminToken(): Promise<string | null> {
@@ -128,6 +129,21 @@ export async function deleteFeedPost(id: string): Promise<AdminResult> {
   });
   const data = await res.json().catch(() => ({})) as { error?: string };
   return { ok: res.ok, error: data.error };
+}
+
+export async function generatePunditTest(
+  args: { sample?: boolean; fixtureId?: number },
+): Promise<{ ok: boolean; commentary?: PunditLine[]; hasKey?: boolean; error?: string }> {
+  const token = await adminToken();
+  const res = await fetch("/api/admin/commentary", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(args),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    commentary?: PunditLine[]; hasKey?: boolean; error?: string;
+  };
+  return { ok: res.ok, commentary: data.commentary, hasKey: data.hasKey, error: data.error };
 }
 
 export async function removeUser(uid: string): Promise<AdminResult> {

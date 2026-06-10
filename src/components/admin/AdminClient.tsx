@@ -7,9 +7,11 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
+import { PunditDesk } from "@/components/PunditDesk";
+import type { PunditLine } from "@/lib/feedTypes";
 
 export function AdminClient() {
   const { user, mockMode } = useAuth();
@@ -29,6 +31,10 @@ export function AdminClient() {
   const [logoOverrides, setLogoOverrides] = useState<Record<string, string>>({});
   const [logoBusyUid, setLogoBusyUid] = useState<string | null>(null);
   const [backing, setBacking] = useState(false);
+  const [punditLines, setPunditLines] = useState<PunditLine[] | null>(null);
+  const [punditBusy, setPunditBusy] = useState(false);
+  const [punditFixtureId, setPunditFixtureId] = useState("");
+  const [punditNote, setPunditNote] = useState<string | null>(null);
 
   // Load current weekly message
   useEffect(() => {
@@ -66,6 +72,24 @@ export function AdminClient() {
   function flash(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 5000);
+  }
+
+  async function runPunditTest(args: { sample?: boolean; fixtureId?: number }) {
+    setPunditBusy(true);
+    setPunditNote(null);
+    setPunditLines(null);
+    try {
+      const r = await generatePunditTest(args);
+      if (!r.ok) { setPunditNote(`Failed: ${r.error ?? "unknown error"}`); return; }
+      setPunditLines(r.commentary ?? []);
+      setPunditNote(r.hasKey
+        ? "Generated with Gemini."
+        : "No GEMINI_API_KEY set — showing the templated fallback. Add the key to see AI commentary.");
+    } catch {
+      setPunditNote("Request failed.");
+    } finally {
+      setPunditBusy(false);
+    }
   }
 
   async function handleTeamLogo(uid: string, teamName: string, file: File) {
@@ -119,6 +143,43 @@ export function AdminClient() {
           {toast}
         </div>
       )}
+
+      {/* Pundit commentary tester */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Pundit commentary (test)</h2>
+        <p className="mb-3 text-sm text-[var(--muted)]">
+          Preview the AI pundit desk before real matches finish. Generate a sample match, or pull a
+          real fixture by its API-Football ID.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            className="btn-primary"
+            disabled={punditBusy}
+            onClick={() => runPunditTest({ sample: true })}
+          >
+            {punditBusy ? "Generating…" : "Generate sample match"}
+          </button>
+          <input
+            className="input w-32"
+            placeholder="Fixture ID"
+            value={punditFixtureId}
+            onChange={(e) => setPunditFixtureId(e.target.value.replace(/[^0-9]/g, ""))}
+          />
+          <button
+            className="btn-ghost"
+            disabled={punditBusy || !punditFixtureId}
+            onClick={() => runPunditTest({ fixtureId: Number(punditFixtureId) })}
+          >
+            Generate for fixture
+          </button>
+        </div>
+        {punditNote && <p className="mt-2 text-xs text-[var(--muted)]">{punditNote}</p>}
+        {punditLines && punditLines.length > 0 && (
+          <div className="mt-3">
+            <PunditDesk lines={punditLines} />
+          </div>
+        )}
+      </section>
 
       {/* Post to the activity feed */}
       <section className="card p-4">
