@@ -104,5 +104,9 @@ export interface FeedEntry {
   /** Sorted by pts desc. */
   perUser: PerUserMatchResult[];
   lateDrama?: FeedLateDrama;
+  /** Goal scorers, for pundit commentary on player impact. */
+  scorers?: MatchScorer[];
+  /** AI pundit-desk reaction to this match (generated at completion). */
+  commentary?: PunditLine[];
   createdAt: string; // ISO
 }

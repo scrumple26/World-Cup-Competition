@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { FeedEntry, FeedPost, PerUserMatchResult, WeeklyTimes } from "@/lib/feedTypes";
 import { WeeklyTimesCard } from "./WeeklyTimesCard";
+import { PunditDesk } from "./PunditDesk";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,13 @@ function FeedCard({ entry, myUid, spoilerMode }: { entry: FeedEntry; myUid?: str
           {narrative.map((line, i) => (
             <p key={i} className="text-sm text-[var(--muted)] leading-snug">{line}</p>
           ))}
+        </div>
+      )}
+
+      {/* Pundit desk reaction */}
+      {entry.commentary && entry.commentary.length > 0 && (
+        <div className="border-t border-[var(--border)] px-4 py-3">
+          <PunditDesk lines={entry.commentary} />
         </div>
       )}
         </>

@@ -9,6 +9,7 @@ import { FRIEND_GROUPS } from "@/lib/wc";
 import { displayName } from "@/lib/types";
 import type { WeeklyMessage } from "@/app/api/config/weekly-message/route";
 import { ActivityFeed } from "@/components/ActivityFeed";
+import { LiveNow } from "@/components/LiveNow";
 import type { FeedEntry } from "@/lib/feedTypes";
 
 const CARDS = [
@@ -208,6 +209,9 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Live now */}
+      <LiveNow spoilerMode={user?.hideScores} />
 
       {/* Competition groups */}
       {groupStandings && (
