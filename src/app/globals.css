@@ -1,6 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Newspaper-style display serif for the Global Football Cup Times masthead/headlines */
+.font-news { font-family: "Playfair Display", Georgia, "Times New Roman", serif; }
 
 /* ============================================================
    LIGHT MODE — default (WC 2026 official palette)

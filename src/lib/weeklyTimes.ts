@@ -23,9 +23,6 @@ function ordSuffix(n: number): string {
   const v = n % 100;
   return s[(v - 20) % 10] ?? s[v] ?? s[0];
 }
-function ordinalPlace(n: number): string {
-  return `${n}${ordSuffix(n)} place`;
-}
 /** Cumulative total as of a given date from a score history. */
 function totalAsOf(history: { date: string; total: number }[], dateStr: string): number {
   const on = [...history].sort((a, b) => a.date.localeCompare(b.date)).filter((h) => h.date <= dateStr);
@@ -132,21 +129,19 @@ export async function gatherWeeklyData(db: Firestore): Promise<WeeklyData> {
     .map(([teamName, v]) => ({ teamName, logoUrl: v.logo, value: v.n }))
     .sort((a, b) => b.value - a.value).slice(0, 5);
 
-  // --- Close races in the friends' league (overall + within each group's qualifying line) ---
+  // --- Close races: only the battles to finish 1st or 2nd (the qualifying spots) in each group ---
   const closeRaces: string[] = [];
-  const overall = users
-    .map((u) => ({ team: u.teamName, total: scoreByUid.get(u.uid)?.total ?? 0 }))
-    .sort((a, b) => b.total - a.total);
-  for (let i = 0; i < overall.length - 1 && i < 4; i++) {
-    const gap = overall[i].total - overall[i + 1].total;
-    if (gap === 0) closeRaces.push(`${overall[i].team} and ${overall[i + 1].team} are tied on ${overall[i].total} pts for ${ordinalPlace(i + 1)} overall.`);
-    else if (gap <= 2) closeRaces.push(`${overall[i].team} leads ${overall[i + 1].team} by ${gap} pt${gap === 1 ? "" : "s"} for ${ordinalPlace(i + 1)} overall.`);
-  }
   for (const g of groups) {
-    if (g.teams.length >= 3) {
-      const gap = g.teams[1].points - g.teams[2].points;
-      if (gap === 0) closeRaces.push(`${g.group}: ${g.teams[1].team} and ${g.teams[2].team} are level on ${g.teams[1].points} pts for 2nd.`);
-      else if (gap <= 2) closeRaces.push(`${g.group}: ${g.teams[2].team} is ${gap} pt${gap === 1 ? "" : "s"} behind ${g.teams[1].team} for 2nd.`);
+    const t = g.teams;
+    if (t.length >= 2) {
+      const gap12 = t[0].points - t[1].points;
+      if (gap12 === 0) closeRaces.push(`${g.group}: ${t[0].team} and ${t[1].team} are tied at the top on ${t[0].points} pts.`);
+      else if (gap12 <= 2) closeRaces.push(`${g.group}: ${t[1].team} is ${gap12} pt${gap12 === 1 ? "" : "s"} behind ${t[0].team} for top spot.`);
+    }
+    if (t.length >= 3) {
+      const gap23 = t[1].points - t[2].points;
+      if (gap23 === 0) closeRaces.push(`${g.group}: ${t[1].team} and ${t[2].team} are level on ${t[1].points} pts for the 2nd qualifying spot.`);
+      else if (gap23 <= 2) closeRaces.push(`${g.group}: ${t[2].team} is ${gap23} pt${gap23 === 1 ? "" : "s"} behind ${t[1].team} for the 2nd qualifying spot.`);
     }
   }
 

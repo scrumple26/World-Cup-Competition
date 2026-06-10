@@ -68,9 +68,11 @@ export function WeeklyTimesCard({ times, defaultExpanded = false }: { times: Wee
         onClick={() => setOpen((o) => !o)}
         className="block w-full border-b-2 border-double border-[var(--fg)] px-4 py-3 text-center"
       >
-        <div className="text-[10px] uppercase tracking-[0.3em] text-[var(--muted)]">The Global Football Cup Times</div>
-        <div className="my-1 text-lg font-black leading-tight">{times.headline}</div>
-        {times.subhead && <div className="text-xs italic text-[var(--muted)]">{times.subhead}</div>}
+        <div className="border-b border-[var(--fg)]/30 pb-1.5">
+          <div className="font-news text-2xl font-black leading-none tracking-tight sm:text-3xl">The Global Football Cup Times</div>
+        </div>
+        <div className="font-news my-2 text-lg font-extrabold leading-tight sm:text-xl">{times.headline}</div>
+        {times.subhead && <div className="font-news text-xs italic text-[var(--muted)]">{times.subhead}</div>}
         <div className="mt-1 flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-[var(--muted)]">
           <span>{dateStr}</span>
           <span>·</span>
@@ -115,8 +117,8 @@ export function WeeklyTimesCard({ times, defaultExpanded = false }: { times: Wee
           {times.closeRaces.length > 0 && (
             <div className="rounded border border-[var(--border)] bg-[var(--bg-elev)] p-3">
               <div className="mb-1 text-xs font-bold uppercase tracking-wide">Too Close to Call</div>
-              <ul className="list-disc space-y-0.5 pl-4 text-[12px]">
-                {times.closeRaces.map((r, i) => <li key={i}>{r}</li>)}
+              <ul className={`list-disc space-y-0.5 pl-4 text-[12px] ${times.closeRaces.length > 4 ? "sm:columns-2 sm:gap-6" : ""}`}>
+                {times.closeRaces.map((r, i) => <li key={i} className="break-inside-avoid">{r}</li>)}
               </ul>
             </div>
           )}
