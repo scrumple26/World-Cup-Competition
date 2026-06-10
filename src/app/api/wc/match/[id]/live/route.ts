@@ -28,6 +28,9 @@ export type StatSide = {
   yellowCards: number;
   redCards: number;
   offsides: number;
+  saves: number;
+  passes: number;
+  passAccuracy: number; // percentage 0–100
 };
 
 export type LiveMatchDetails = {
@@ -102,16 +105,28 @@ export async function GET(
       const sides = [statsRaw[0], statsRaw[1]];
       const home = sides.find((s) => s.team.id === homeId)?.statistics ?? [];
       const away = sides.find((s) => s.team.id === awayId)?.statistics ?? [];
-      const parseSide = (s: typeof home): StatSide => ({
-        possession:    String(s.find((x) => x.type === "Ball Possession")?.value ?? "0%"),
-        shots:         statVal(s, "Total Shots"),
-        shotsOnTarget: statVal(s, "Shots on Goal"),
-        corners:       statVal(s, "Corner Kicks"),
-        fouls:         statVal(s, "Fouls"),
-        yellowCards:   statVal(s, "Yellow Cards"),
-        redCards:      statVal(s, "Red Cards"),
-        offsides:      statVal(s, "Offsides"),
-      });
+      const parseSide = (s: typeof home): StatSide => {
+        const passesTotal = statVal(s, "Total passes");
+        const passesAccurate = statVal(s, "Passes accurate");
+        // API gives "Passes %" as e.g. "85%"; fall back to accurate/total.
+        let passAccuracy = statVal(s, "Passes %");
+        if (!passAccuracy && passesTotal > 0) {
+          passAccuracy = Math.round((passesAccurate / passesTotal) * 100);
+        }
+        return {
+          possession:    String(s.find((x) => x.type === "Ball Possession")?.value ?? "0%"),
+          shots:         statVal(s, "Total Shots"),
+          shotsOnTarget: statVal(s, "Shots on Goal"),
+          corners:       statVal(s, "Corner Kicks"),
+          fouls:         statVal(s, "Fouls"),
+          yellowCards:   statVal(s, "Yellow Cards"),
+          redCards:      statVal(s, "Red Cards"),
+          offsides:      statVal(s, "Offsides"),
+          saves:         statVal(s, "Goalkeeper Saves"),
+          passes:        passesTotal,
+          passAccuracy,
+        };
+      };
       stats = { home: parseSide(home), away: parseSide(away) };
     }
 

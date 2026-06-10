@@ -5,7 +5,7 @@ import { useWcData } from "@/lib/useWcData";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { isPlayed } from "@/lib/wcMap";
 import type { WcMatch } from "@/lib/types";
-import type { LiveMatchDetails } from "@/app/api/wc/match/[id]/live/route";
+import type { LiveMatchDetails, LiveEvent } from "@/app/api/wc/match/[id]/live/route";
 import type { MatchPredictionEntry } from "@/app/api/wc/match/[id]/predictions/route";
 import { displayName } from "@/lib/types";
 
@@ -397,6 +397,9 @@ function LivePanel({
   }
 
   const events = details.events.filter((e) => e.type !== "other" && e.type !== "sub" || e.type === "sub");
+  const timelineEvents = details.events.filter((e) =>
+    ["goal", "owngoal", "penalty", "yellowcard", "redcard", "yellowredcard", "var"].includes(e.type),
+  );
 
   // Evaluate prediction against current live score (only shown when not spoiler-hidden)
   const liveHome = match.goals.home;
@@ -433,72 +436,130 @@ function LivePanel({
         </div>
       )}
 
-      {/* Events */}
-      {events.length > 0 && (
-        <div>
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">Match Events</div>
-          <div className="space-y-1">
-            {events.map((e, i) => (
-              <div key={i} className={`flex items-center gap-2 text-xs ${e.teamSide === "home" ? "flex-row" : "flex-row-reverse"}`}>
-                <span className="w-8 shrink-0 text-center text-[var(--muted)] tabular-nums">
-                  {e.minute}{e.extraMinute ? `+${e.extraMinute}` : ""}&apos;
-                </span>
-                <span>{EVENT_ICON[e.type] ?? "•"}</span>
-                <span className="font-medium">{e.player}</span>
-                {e.assist && e.type !== "sub" && (
-                  <span className="text-[var(--muted)]">({e.assist})</span>
-                )}
+      {hideScores ? (
+        <p className="text-xs text-[var(--muted)]">
+          Match details hidden — spoiler protection is on. Reveal the result above to view the timeline, events and stats.
+        </p>
+      ) : (
+        <>
+          {/* Timeline graphic */}
+          {timelineEvents.length > 0 && (
+            <MatchTimeline events={timelineEvents} elapsed={details.elapsed} status={details.status} />
+          )}
+
+          {/* Events */}
+          {events.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">Match Events</div>
+              <div className="space-y-1">
+                {events.map((e, i) => (
+                  <div key={i} className={`flex items-center gap-2 text-xs ${e.teamSide === "home" ? "flex-row" : "flex-row-reverse"}`}>
+                    <span className="w-8 shrink-0 text-center text-[var(--muted)] tabular-nums">
+                      {e.minute}{e.extraMinute ? `+${e.extraMinute}` : ""}&apos;
+                    </span>
+                    <span>{EVENT_ICON[e.type] ?? "•"}</span>
+                    <span className="font-medium">{e.player}</span>
+                    {e.assist && e.type !== "sub" && (
+                      <span className="text-[var(--muted)]">({e.assist})</span>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* Stats */}
-      {details.stats && !hideScores && (
-        <div>
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">Live Stats</div>
-          <div className="space-y-1.5 text-xs">
-            <StatBar label="Possession" home={details.stats.home.possession} away={details.stats.away.possession} isPercent />
-            <StatRow label="Shots" home={details.stats.home.shots} away={details.stats.away.shots} />
-            <StatRow label="On Target" home={details.stats.home.shotsOnTarget} away={details.stats.away.shotsOnTarget} />
-            <StatRow label="Corners" home={details.stats.home.corners} away={details.stats.away.corners} />
-            <StatRow label="Fouls" home={details.stats.home.fouls} away={details.stats.away.fouls} />
-          </div>
-        </div>
-      )}
+          {/* Stats graphics */}
+          {details.stats && (
+            <div>
+              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">Live Stats</div>
+              <div className="space-y-2 text-xs">
+                <StatCompare label="Possession" home={pctNum(details.stats.home.possession)} away={pctNum(details.stats.away.possession)} suffix="%" />
+                <StatCompare label="Shots" home={details.stats.home.shots} away={details.stats.away.shots} />
+                <StatCompare label="On Target" home={details.stats.home.shotsOnTarget} away={details.stats.away.shotsOnTarget} />
+                <StatCompare label="Corners" home={details.stats.home.corners} away={details.stats.away.corners} />
+                <StatCompare label="Fouls" home={details.stats.home.fouls} away={details.stats.away.fouls} />
+                <StatCompare label="Offsides" home={details.stats.home.offsides} away={details.stats.away.offsides} />
+                <StatCompare label="Saves" home={details.stats.home.saves} away={details.stats.away.saves} />
+                <StatCompare label="Yellow Cards" home={details.stats.home.yellowCards} away={details.stats.away.yellowCards} />
+                <StatCompare label="Red Cards" home={details.stats.home.redCards} away={details.stats.away.redCards} />
+                <StatCompare label="Passes" home={details.stats.home.passes} away={details.stats.away.passes} />
+                <StatCompare label="Pass Accuracy" home={details.stats.home.passAccuracy} away={details.stats.away.passAccuracy} suffix="%" />
+              </div>
+            </div>
+          )}
 
-      {events.length === 0 && !details.stats && (
-        <p className="text-xs text-[var(--muted)]">No events yet.</p>
+          {events.length === 0 && !details.stats && (
+            <p className="text-xs text-[var(--muted)]">No events yet.</p>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function StatBar({ label, home, away, isPercent }: { label: string; home: string | number; away: string | number; isPercent?: boolean }) {
-  const h = parseFloat(String(home)) || 0;
-  const total = isPercent ? 100 : (h + (parseFloat(String(away)) || 0)) || 1;
-  const pct = Math.round((h / total) * 100);
+function pctNum(v: string | number): number {
+  return Math.round(parseFloat(String(v)) || 0);
+}
+
+/** Two-sided comparison bar: home (accent) vs away (navy), proportional. */
+function StatCompare({ label, home, away, suffix = "" }: { label: string; home: number; away: number; suffix?: string }) {
+  const total = home + away;
+  const homePct = total > 0 ? (home / total) * 100 : 50;
   return (
     <div>
-      <div className="mb-0.5 flex justify-between text-[var(--muted)]">
-        <span>{home}{isPercent ? "" : ""}</span>
-        <span className="font-medium text-[var(--fg)]">{label}</span>
-        <span>{away}{isPercent ? "" : ""}</span>
+      <div className="mb-0.5 flex items-center justify-between text-[11px]">
+        <span className="font-semibold tabular-nums text-[var(--fg)]">{home}{suffix}</span>
+        <span className="text-[var(--muted)]">{label}</span>
+        <span className="font-semibold tabular-nums text-[var(--fg)]">{away}{suffix}</span>
       </div>
-      <div className="flex h-1.5 overflow-hidden rounded-full bg-[var(--border)]">
-        <div className="bg-[var(--accent)] transition-all" style={{ width: `${pct}%` }} />
+      <div className="flex h-2 overflow-hidden rounded-full bg-[var(--border)]">
+        <div className="bg-[var(--accent)] transition-all" style={{ width: `${homePct}%` }} />
+        <div className="bg-[var(--accent-2)] transition-all" style={{ width: `${100 - homePct}%` }} />
       </div>
     </div>
   );
 }
 
-function StatRow({ label, home, away }: { label: string; home: number; away: number }) {
+/** Horizontal match timeline: goals/cards/VAR placed by minute, home above the
+ *  line, away below. */
+function MatchTimeline({ events, elapsed, status }: { events: LiveEvent[]; elapsed: number | null; status: string }) {
+  const maxEventMin = events.reduce((m, e) => Math.max(m, e.minute + (e.extraMinute ?? 0)), 0);
+  const done = ["FT", "AET", "PEN"].includes(status);
+  const maxMin = Math.max(90, maxEventMin, elapsed ?? 0, done && maxEventMin > 90 ? 120 : 90);
+  const pos = (e: LiveEvent) => Math.min(100, ((e.minute + (e.extraMinute ?? 0)) / maxMin) * 100);
   return (
-    <div className="flex items-center justify-between">
-      <span className="w-8 text-center font-medium">{home}</span>
-      <span className="text-[var(--muted)]">{label}</span>
-      <span className="w-8 text-center font-medium">{away}</span>
+    <div>
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">Timeline</div>
+      <div className="relative h-16">
+        <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[var(--border)]" />
+        {[45, 90].filter((t) => t <= maxMin).map((t) => (
+          <div
+            key={t}
+            className="absolute top-1/2 h-3 w-px -translate-y-1/2 bg-[var(--border)]"
+            style={{ left: `${(t / maxMin) * 100}%` }}
+          />
+        ))}
+        {events.map((e, i) => (
+          <div
+            key={i}
+            className="absolute -translate-x-1/2 text-center"
+            style={{
+              left: `${pos(e)}%`,
+              top: e.teamSide === "home" ? "0px" : undefined,
+              bottom: e.teamSide === "away" ? "0px" : undefined,
+            }}
+            title={`${e.player} · ${e.minute}${e.extraMinute ? "+" + e.extraMinute : ""}'`}
+          >
+            <span className="text-sm leading-none">{EVENT_ICON[e.type] ?? "•"}</span>
+            <span className="block text-[8px] text-[var(--muted)] tabular-nums">
+              {e.minute}{e.extraMinute ? `+${e.extraMinute}` : ""}&apos;
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between text-[9px] text-[var(--muted)]">
+        <span>0&apos;</span><span>{maxMin}&apos;</span>
+      </div>
     </div>
   );
 }
