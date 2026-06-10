@@ -43,6 +43,45 @@ export interface MatchScorer {
   kind: "goal" | "owngoal" | "penalty";
 }
 
+// ── Weekly "Global Football Cup Times" newspaper ──────────────────────────────
+
+export interface WeeklyGroupTeam {
+  team: string;
+  logo?: string;
+  rank: number;
+  prevRank: number | null; // rank at the start of the week; null if no prior snapshot
+  points: number;
+  played: number;
+}
+
+export interface WeeklyGroup {
+  group: string; // e.g. "Group A"
+  teams: WeeklyGroupTeam[];
+}
+
+export interface WeeklyStatLine {
+  teamName: string;
+  logoUrl?: string;
+  value: number;
+}
+
+/** One weekly newspaper edition, stored in the `weeklyTimes` collection. */
+export interface WeeklyTimes {
+  id: string;        // week-ending date YYYY-MM-DD
+  weekStart: string; // YYYY-MM-DD
+  weekEnd: string;   // YYYY-MM-DD
+  headline: string;
+  subhead?: string;
+  body: string[];    // AI-written newspaper paragraphs
+  punditColumn: PunditLine[];
+  groups: WeeklyGroup[];
+  topPoints: WeeklyStatLine[];   // most points gained this week
+  topPerfects: WeeklyStatLine[]; // most perfect games this week
+  closeRaces: string[];          // tight races worth watching
+  matchesPlayed: number;
+  createdAt: string; // ISO
+}
+
 /** A free-form post authored by the admin (text and/or image). */
 export interface FeedPost {
   id: string;

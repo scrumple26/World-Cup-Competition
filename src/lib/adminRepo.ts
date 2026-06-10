@@ -4,7 +4,7 @@
 
 import { USE_MOCK } from "./config";
 import type { FriendGroup, Outcome, UserProfile } from "./types";
-import type { PunditLine } from "./feedTypes";
+import type { PunditLine, WeeklyTimes } from "./feedTypes";
 import { saveUser } from "./mock/store";
 
 async function adminToken(): Promise<string | null> {
@@ -144,6 +144,21 @@ export async function generatePunditTest(
     commentary?: PunditLine[]; hasKey?: boolean; error?: string;
   };
   return { ok: res.ok, commentary: data.commentary, hasKey: data.hasKey, error: data.error };
+}
+
+export async function generateWeeklyTimesTest(
+  preview = true,
+): Promise<{ ok: boolean; times?: WeeklyTimes; hasKey?: boolean; error?: string }> {
+  const token = await adminToken();
+  const res = await fetch("/api/feed/weekly", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ preview }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    times?: WeeklyTimes; hasKey?: boolean; error?: string;
+  };
+  return { ok: res.ok, times: data.times, hasKey: data.hasKey, error: data.error };
 }
 
 export async function removeUser(uid: string): Promise<AdminResult> {

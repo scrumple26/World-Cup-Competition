@@ -7,11 +7,12 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateWeeklyTimesTest, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PunditDesk } from "@/components/PunditDesk";
-import type { PunditLine } from "@/lib/feedTypes";
+import { WeeklyTimesCard } from "@/components/WeeklyTimesCard";
+import type { PunditLine, WeeklyTimes } from "@/lib/feedTypes";
 
 export function AdminClient() {
   const { user, mockMode } = useAuth();
@@ -35,6 +36,9 @@ export function AdminClient() {
   const [punditBusy, setPunditBusy] = useState(false);
   const [punditFixtureId, setPunditFixtureId] = useState("");
   const [punditNote, setPunditNote] = useState<string | null>(null);
+  const [weeklyTimes, setWeeklyTimes] = useState<WeeklyTimes | null>(null);
+  const [weeklyBusy, setWeeklyBusy] = useState(false);
+  const [weeklyNote, setWeeklyNote] = useState<string | null>(null);
 
   // Load current weekly message
   useEffect(() => {
@@ -89,6 +93,24 @@ export function AdminClient() {
       setPunditNote("Request failed.");
     } finally {
       setPunditBusy(false);
+    }
+  }
+
+  async function runWeeklyTimesTest() {
+    setWeeklyBusy(true);
+    setWeeklyNote(null);
+    setWeeklyTimes(null);
+    try {
+      const r = await generateWeeklyTimesTest(true);
+      if (!r.ok) { setWeeklyNote(`Failed: ${r.error ?? "unknown error"}`); return; }
+      setWeeklyTimes(r.times ?? null);
+      setWeeklyNote(r.hasKey
+        ? "Preview generated with Gemini (not saved to the feed)."
+        : "No GEMINI_API_KEY set — showing the templated fallback. Add the key for AI prose.");
+    } catch {
+      setWeeklyNote("Request failed.");
+    } finally {
+      setWeeklyBusy(false);
     }
   }
 
@@ -177,6 +199,25 @@ export function AdminClient() {
         {punditLines && punditLines.length > 0 && (
           <div className="mt-3">
             <PunditDesk lines={punditLines} />
+          </div>
+        )}
+      </section>
+
+      {/* Weekly newspaper tester */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Global Football Cup Times (test)</h2>
+        <p className="mb-3 text-sm text-[var(--muted)]">
+          Preview this week&apos;s AI newspaper edition from live data (group movement, top points,
+          perfect games, close races). This preview is <b>not</b> saved to the feed. The real edition
+          posts automatically every Sunday 9 AM.
+        </p>
+        <button className="btn-primary" disabled={weeklyBusy} onClick={runWeeklyTimesTest}>
+          {weeklyBusy ? "Writing the paper…" : "Generate this week's edition"}
+        </button>
+        {weeklyNote && <p className="mt-2 text-xs text-[var(--muted)]">{weeklyNote}</p>}
+        {weeklyTimes && (
+          <div className="mt-3">
+            <WeeklyTimesCard times={weeklyTimes} defaultExpanded />
           </div>
         )}
       </section>

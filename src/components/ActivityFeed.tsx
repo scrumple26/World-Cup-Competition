@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { FeedEntry, FeedPost, PerUserMatchResult } from "@/lib/feedTypes";
+import type { FeedEntry, FeedPost, PerUserMatchResult, WeeklyTimes } from "@/lib/feedTypes";
+import { WeeklyTimesCard } from "./WeeklyTimesCard";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -98,26 +99,36 @@ function buildNarrative(entry: FeedEntry, myUid?: string): string[] {
 // ── FeedCard ─────────────────────────────────────────────────────────────────
 
 function FeedCard({ entry, myUid, spoilerMode }: { entry: FeedEntry; myUid?: string; spoilerMode?: boolean }) {
+  const [open, setOpen] = useState(false);
   const [revealed, setRevealed] = useState(!spoilerMode);
   const { homeTeam, awayTeam, homeScore, awayScore, homeLogo, awayLogo, kickoff, perUser } = entry;
   const dateStr = new Date(kickoff).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const narrative = buildNarrative(entry, myUid);
 
-  if (!revealed) {
-    return (
-      <div className="card overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-elev)] px-4 py-2.5">
-          <div className="flex flex-1 items-center justify-end gap-2">
-            {homeLogo && <img src={homeLogo} alt="" className="h-5 w-5 object-contain flex-shrink-0" />}
-            <span className="font-semibold text-sm">{homeTeam}</span>
-          </div>
-          <span className="mx-2 text-base font-bold tabular-nums text-[var(--muted)]">vs</span>
-          <div className="flex flex-1 items-center gap-2">
-            <span className="font-semibold text-sm">{awayTeam}</span>
-            {awayLogo && <img src={awayLogo} alt="" className="h-5 w-5 object-contain flex-shrink-0" />}
-          </div>
-          <span className="ml-auto text-xs text-[var(--muted)] flex-shrink-0">{dateStr}</span>
+  return (
+    <div className="card overflow-hidden">
+      {/* Match header — click to expand */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-elev)] px-4 py-2.5 text-left hover:bg-[var(--bg-card)]"
+      >
+        <div className="flex flex-1 items-center justify-end gap-2">
+          {homeLogo && <img src={homeLogo} alt="" className="h-5 w-5 object-contain flex-shrink-0" />}
+          <span className="text-sm font-semibold">{homeTeam}</span>
         </div>
+        <span className={`mx-2 text-base font-bold tabular-nums ${revealed ? "" : "text-[var(--muted)]"}`}>
+          {revealed ? `${homeScore} – ${awayScore}` : "vs"}
+        </span>
+        <div className="flex flex-1 items-center gap-2">
+          <span className="text-sm font-semibold">{awayTeam}</span>
+          {awayLogo && <img src={awayLogo} alt="" className="h-5 w-5 object-contain flex-shrink-0" />}
+        </div>
+        <span className="ml-auto flex-shrink-0 text-xs text-[var(--muted)]">{dateStr}</span>
+        <span className="flex-shrink-0 text-xs text-[var(--muted)]">{open ? "▴" : "▾"}</span>
+      </button>
+
+      {!open ? null : !revealed ? (
         <div className="flex items-center justify-between px-4 py-3">
           <span className="text-sm text-[var(--muted)]">Result hidden (spoiler protection)</span>
           <button
@@ -128,32 +139,8 @@ function FeedCard({ entry, myUid, spoilerMode }: { entry: FeedEntry; myUid?: str
             Show result
           </button>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="card overflow-hidden">
-      {/* Match header */}
-      <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-elev)] px-4 py-2.5">
-        <div className="flex flex-1 items-center justify-end gap-2">
-          {homeLogo && (
-            <img src={homeLogo} alt="" className="h-5 w-5 object-contain flex-shrink-0" />
-          )}
-          <span className="font-semibold text-sm">{homeTeam}</span>
-        </div>
-        <span className="mx-2 text-base font-bold tabular-nums">
-          {homeScore} – {awayScore}
-        </span>
-        <div className="flex flex-1 items-center gap-2">
-          <span className="font-semibold text-sm">{awayTeam}</span>
-          {awayLogo && (
-            <img src={awayLogo} alt="" className="h-5 w-5 object-contain flex-shrink-0" />
-          )}
-        </div>
-        <span className="ml-auto text-xs text-[var(--muted)] flex-shrink-0">{dateStr}</span>
-      </div>
-
+      ) : (
+        <>
       {/* Per-user points */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-2.5">
         {perUser.map((u) => {
@@ -186,6 +173,8 @@ function FeedCard({ entry, myUid, spoilerMode }: { entry: FeedEntry; myUid?: str
           ))}
         </div>
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -217,12 +206,13 @@ function PostCard({ post }: { post: FeedPost }) {
 export function ActivityFeed({ myUid, overallLeader, spoilerMode }: { myUid?: string; overallLeader?: { teamName: string; uid: string }; spoilerMode?: boolean }) {
   const [entries, setEntries] = useState<FeedEntry[]>([]);
   const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [times, setTimes] = useState<WeeklyTimes[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/feed")
       .then((r) => r.json())
-      .then((d) => { setEntries(d.entries ?? []); setPosts(d.posts ?? []); })
+      .then((d) => { setEntries(d.entries ?? []); setPosts(d.posts ?? []); setTimes(d.times ?? []); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -233,7 +223,7 @@ export function ActivityFeed({ myUid, overallLeader, spoilerMode }: { myUid?: st
     );
   }
 
-  if (entries.length === 0 && posts.length === 0) {
+  if (entries.length === 0 && posts.length === 0 && times.length === 0) {
     return (
       <div className="card p-4 text-sm text-[var(--muted)]">
         Activity will appear here once matches are played and scored.
@@ -241,10 +231,11 @@ export function ActivityFeed({ myUid, overallLeader, spoilerMode }: { myUid?: st
     );
   }
 
-  // Merge admin posts and match entries into one stream, newest first.
+  // Merge admin posts, match entries, and weekly editions into one stream, newest first.
   const items = [
     ...posts.map((p) => ({ kind: "post" as const, t: p.createdAt, post: p })),
     ...entries.map((e) => ({ kind: "match" as const, t: e.createdAt ?? e.kickoff, entry: e })),
+    ...times.map((w) => ({ kind: "times" as const, t: w.createdAt, times: w })),
   ].sort((a, b) => (a.t < b.t ? 1 : a.t > b.t ? -1 : 0));
 
   return (
@@ -263,6 +254,8 @@ export function ActivityFeed({ myUid, overallLeader, spoilerMode }: { myUid?: st
       {items.map((it) =>
         it.kind === "post" ? (
           <PostCard key={`post-${it.post.id}`} post={it.post} />
+        ) : it.kind === "times" ? (
+          <WeeklyTimesCard key={`times-${it.times.id}`} times={it.times} />
         ) : (
           <FeedCard key={`match-${it.entry.fixtureId}`} entry={it.entry} myUid={myUid} spoilerMode={spoilerMode} />
         ),

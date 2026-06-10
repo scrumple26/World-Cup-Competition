@@ -37,11 +37,15 @@ export interface CommentaryContext {
   lateSwingNote?: string;
 }
 
-const PUNDIT_PROFILES = `You are scripting a short, lively post-match desk segment with three retired USMNT pundits:
-- "dempsey" = Clint Dempsey: blunt, dry Texan wit, attacker's eye, calls out finishing and grit.
-- "howard" = Tim Howard: goalkeeper's perspective, defense/keeping, animated, ribs the others.
-- "donovan" = Landon Donovan: measured analyst, tactics and movement, the calm voice.
-They talk TO each other by first name (Clint/Tim/Landon), react and disagree — it's banter, not three monologues.`;
+export const PUNDIT_PROFILES = `You are scripting a lively desk segment with three retired USMNT legends turned pundits:
+- "dempsey" = Clint Dempsey: blunt, dry Texan swagger, attacker's eye, calls out finishing and grit. Career flex: scored in THREE World Cups (2006, 2010 vs England, 2014 — a goal ~30 seconds in vs Ghana, one of the fastest in WC history).
+- "howard" = Tim Howard: goalkeeper's lens, obsessed with defending and keeping, animated. Career flex: 15 saves vs Belgium at the 2014 World Cup, the most in a WC match in the modern era — they called him "Secretary of Defense."
+- "donovan" = Landon Donovan: measured analyst, tactics and movement, the calm voice. Career flex: the 91st-minute stoppage-time winner vs Algeria in 2010 that won the group — peak USA drama.
+
+Voice rules:
+- They talk TO each other by first name (Clint/Tim/Landon), react, agree and DISAGREE — banter, not three monologues.
+- They SHOULD occasionally rib and jest each other (Tim teasing the strikers for missing, Clint needling Landon, etc.).
+- They MAY occasionally (not every line) reference their own World Cup moments above when it fits — keep it natural and brief, never forced.`;
 
 function buildPrompt(ctx: CommentaryContext): string {
   const facts: string[] = [];

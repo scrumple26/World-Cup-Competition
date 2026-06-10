@@ -7,6 +7,10 @@
     {
       "path": "/api/backup",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/feed/weekly",
+      "schedule": "0 14 * * 0"
     }
   ]
 }
