@@ -1,10 +1,11 @@
 import "server-only";
 
 import type { Firestore, QueryDocumentSnapshot, DocumentData } from "firebase-admin/firestore";
-import type { WcMatch, MatchPrediction, UserProfile } from "./types";
+import type { WcMatch, MatchPrediction, UserProfile, ScoreDoc } from "./types";
 import { scoreMatch, outcomeOf } from "./scoring";
 import { getMatchEvents, getMatchStatistics } from "./apiFootball";
 import { generatePunditCommentary, type StatLeaderLine } from "./commentary";
+import { generateTweets, type TweetContext } from "./social";
 import type { FeedEntry, PerUserMatchResult, FeedLateDrama, MatchScorer } from "./feedTypes";
 
 type ApiEvents = Awaited<ReturnType<typeof getMatchEvents>>;
@@ -114,6 +115,69 @@ async function buildStatLeaders(fixtureId: number, homeTeamId: number): Promise<
   }
 }
 
+function hashtagFor(home: string, away: string): string {
+  const s = (x: string) => x.replace(/[^a-zA-Z0-9]/g, "");
+  return `#${s(home)}vs${s(away)}`;
+}
+
+function buildTweetContext(
+  match: WcMatch,
+  perUser: PerUserMatchResult[],
+  scorers: MatchScorer[],
+  lateDrama: FeedLateDrama | undefined,
+  userProfiles: Map<string, UserProfile>,
+  preTotalByUid: Map<string, number>,
+): TweetContext {
+  const perfectPickers = perUser.filter((u) => u.perfect).map((u) => u.teamName);
+  const outcomePickers = perUser.filter((u) => u.outcomeCorrect && !u.perfect).map((u) => u.teamName);
+  const lateScorer = lateDrama && scorers.length ? scorers[scorers.length - 1].player : null;
+
+  // Group risers: who became their group's leader because of this match.
+  const deltaByUid = new Map(perUser.map((u) => [u.uid, u.pts]));
+  const byGroup = new Map<string, { uid: string; team: string; pre: number; post: number }[]>();
+  for (const [uid, p] of userProfiles) {
+    const pre = preTotalByUid.get(uid) ?? 0;
+    const post = pre + (deltaByUid.get(uid) ?? 0);
+    const arr = byGroup.get(p.friendGroup) ?? [];
+    arr.push({ uid, team: p.teamName, pre, post });
+    byGroup.set(p.friendGroup, arr);
+  }
+  const groupRisers: { team: string; group: string }[] = [];
+  for (const [g, members] of byGroup) {
+    if (members.length < 2) continue;
+    const preLeader = [...members].sort((a, b) => b.pre - a.pre)[0];
+    const postLeader = [...members].sort((a, b) => b.post - a.post)[0];
+    if (postLeader && preLeader && postLeader.uid !== preLeader.uid && (deltaByUid.get(postLeader.uid) ?? 0) > 0) {
+      groupRisers.push({ team: postLeader.team, group: g });
+    }
+  }
+
+  const involvedTeams = Array.from(new Set([
+    ...perfectPickers,
+    ...(lateDrama?.lostPerfect ?? []),
+    ...(lateDrama?.gainedPerfect ?? []),
+    ...groupRisers.map((r) => r.team),
+    ...outcomePickers,
+  ])).slice(0, 8);
+
+  return {
+    homeCountry: match.homeTeamName,
+    awayCountry: match.awayTeamName,
+    homeScore: match.goals.home ?? 0,
+    awayScore: match.goals.away ?? 0,
+    matchHashtag: hashtagFor(match.homeTeamName, match.awayTeamName),
+    scorers: scorers.map((s) => ({ player: s.player, minute: s.minute, country: s.side === "home" ? match.homeTeamName : match.awayTeamName })),
+    perfectPickers,
+    outcomePickers,
+    lostPerfect: lateDrama?.lostPerfect ?? [],
+    gainedPerfect: lateDrama?.gainedPerfect ?? [],
+    lateScorer,
+    varInvolved: !!lateDrama?.varInvolved,
+    groupRisers,
+    involvedTeams,
+  };
+}
+
 /**
  * For each newly-completed match, build and store a FeedEntry in Firestore.
  * Called from the sync route after scoring completes.
@@ -130,6 +194,13 @@ export async function generateFeedEntries(
     const u = d.data() as UserProfile;
     userProfiles.set(u.uid, u);
   }
+
+  // Pre-match cumulative totals (for "rose to 1st in group" tweet detection).
+  const preTotalByUid = new Map<string, number>();
+  try {
+    const scoresSnap = await db.collection("scores").get();
+    scoresSnap.forEach((d) => { const s = d.data() as ScoreDoc; preTotalByUid.set(s.uid, s.total ?? 0); });
+  } catch { /* scores may not exist yet */ }
 
   let count = 0;
   for (const match of newlyCompleted) {
@@ -207,6 +278,16 @@ export async function generateFeedEntries(
 
     await db.collection("feedEntries").doc(String(match.id)).set(entry);
     count++;
+
+    // Faux fan tweets about this match's goals/result + GFC angles.
+    try {
+      const tweets = await generateTweets(buildTweetContext(match, perUser, scorers, lateDrama, userProfiles, preTotalByUid));
+      const now = new Date().toISOString();
+      await Promise.all(tweets.map((t, i) => {
+        const id = `${match.id}_${i}`;
+        return db.collection("tweets").doc(id).set({ id, fixtureId: match.id, createdAt: now, ...t });
+      }));
+    } catch { /* tweets are best-effort */ }
   }
 
   return count;

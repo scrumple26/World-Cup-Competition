@@ -35,6 +35,18 @@ export interface PunditLine {
   text: string;
 }
 
+/** A faux fan "tweet" generated on a goal/result, authored by a fan of a GFC team. */
+export interface FauxTweet {
+  id: string;
+  handle: string;       // e.g. "@GalaxyStrikersFan"
+  displayName: string;  // e.g. "Galaxy Strikers Diehard"
+  fanOf: string;        // the Global Football Cup team this fan supports
+  text: string;         // tweet body, including hashtags
+  fixtureId: number;
+  matchup: string;      // "Norway vs Senegal"
+  createdAt: string;    // ISO
+}
+
 /** A goal scorer, for commentary on a player's impact. */
 export interface MatchScorer {
   side: "home" | "away";

@@ -10,6 +10,7 @@ import { displayName } from "@/lib/types";
 import type { WeeklyMessage } from "@/app/api/config/weekly-message/route";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { LiveNow } from "@/components/LiveNow";
+import { SocialFeed } from "@/components/SocialFeed";
 import type { FeedEntry } from "@/lib/feedTypes";
 
 const CARDS = [
@@ -139,8 +140,9 @@ export default function Home() {
         </div>
       )}
 
-      {/* Welcome */}
-      <div className="card p-5">
+      {/* Welcome + Match Buzz (top right) */}
+      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="card p-5 lg:col-span-2">
         <h1 className="text-2xl font-bold">Welcome back, {user?.teamName} 👋</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           Group <b>{user?.friendGroup}</b> · Lock in your predictions before each kickoff.
@@ -209,6 +211,8 @@ export default function Home() {
           </div>
         )}
       </div>
+      <SocialFeed compact limit={6} />
+      </div>
 
       {/* Live now */}
       <LiveNow spoilerMode={user?.hideScores} />
@@ -217,7 +221,7 @@ export default function Home() {
       {groupStandings && (
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-[var(--muted)]">Your Competition</h2>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             {FRIEND_GROUPS.map(g => (
               <div key={g} className="card overflow-hidden">
                 <div className="bg-[var(--bg-elev)] px-3 py-2 text-xs font-bold uppercase tracking-widest text-[var(--accent-2)]">

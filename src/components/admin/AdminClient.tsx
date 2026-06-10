@@ -7,12 +7,13 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateWeeklyTimesTest, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PunditDesk } from "@/components/PunditDesk";
 import { WeeklyTimesCard } from "@/components/WeeklyTimesCard";
-import type { PunditLine, WeeklyTimes } from "@/lib/feedTypes";
+import { SocialFeed } from "@/components/SocialFeed";
+import type { PunditLine, WeeklyTimes, FauxTweet } from "@/lib/feedTypes";
 
 export function AdminClient() {
   const { user, mockMode } = useAuth();
@@ -40,6 +41,9 @@ export function AdminClient() {
   const [weeklyTimes, setWeeklyTimes] = useState<WeeklyTimes | null>(null);
   const [weeklyBusy, setWeeklyBusy] = useState(false);
   const [weeklyNote, setWeeklyNote] = useState<string | null>(null);
+  const [tweets, setTweets] = useState<FauxTweet[] | null>(null);
+  const [tweetBusy, setTweetBusy] = useState(false);
+  const [tweetNote, setTweetNote] = useState<string | null>(null);
 
   // Load current weekly message
   useEffect(() => {
@@ -113,6 +117,22 @@ export function AdminClient() {
       setWeeklyNote("Request failed.");
     } finally {
       setWeeklyBusy(false);
+    }
+  }
+
+  async function runTweetTest() {
+    setTweetBusy(true);
+    setTweetNote(null);
+    setTweets(null);
+    try {
+      const r = await generateTweetTest();
+      if (!r.ok) { setTweetNote(`Failed: ${r.error ?? "unknown error"}`); return; }
+      setTweets(r.tweets ?? []);
+      setTweetNote(r.hasKey ? "Generated with Gemini (sample, not posted)." : "No GEMINI_API_KEY set — showing templated fallback.");
+    } catch {
+      setTweetNote("Request failed.");
+    } finally {
+      setTweetBusy(false);
     }
   }
 
@@ -220,6 +240,23 @@ export function AdminClient() {
         {weeklyTimes && (
           <div className="mt-3">
             <WeeklyTimesCard times={weeklyTimes} defaultExpanded />
+          </div>
+        )}
+      </section>
+
+      {/* Match buzz tester */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Match Buzz (test)</h2>
+        <p className="mb-3 text-sm text-[var(--muted)]">
+          Preview the AI fan tweets generated on goals/results (sample USA-vs-Senegal data, not posted).
+        </p>
+        <button className="btn-primary" disabled={tweetBusy} onClick={runTweetTest}>
+          {tweetBusy ? "Generating…" : "Generate sample tweets"}
+        </button>
+        {tweetNote && <p className="mt-2 text-xs text-[var(--muted)]">{tweetNote}</p>}
+        {tweets && tweets.length > 0 && (
+          <div className="mt-3">
+            <SocialFeed tweets={tweets} />
           </div>
         )}
       </section>

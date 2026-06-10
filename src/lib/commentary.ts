@@ -95,7 +95,9 @@ FACTS (every factual claim — score, players, stats, who made/lost a perfect pi
 ${facts.map((f) => "- " + f).join("\n")}
 
 RULES:
-- 7 to 10 lines of fast, lively back-and-forth. Have ${firstSpeaker} OPEN the segment, leading on ${opener} — a genuine reaction, not a dry stat — then they dig into why it happened. Take a fresh angle and fresh phrasing; don't fall back on a stock opening.
+- EXACTLY 6 lines. ${firstSpeaker} OPENS with a reaction purely about the REAL match — the goal/result and why it happened (lead on ${opener}); no prediction-game talk in line 1.
+- Lines 2-6 stay anchored to the real match but increasingly weave in the Global Football Cup angle (who predicted it, whose perfect game was made or broken, standings movement) — naturally and conversationally, not forced or every line.
+- Fresh angle and phrasing each time; don't fall back on a stock opening.
 - Make it ALIVE: react with excitement, disbelief or sympathy; address each other by name; ask each other real questions and actually answer them; interrupt, agree, and disagree.
 - Keep the voices DISTINCT: Dempsey blunt and swaggering about the attack; Howard fired up about goalkeeping/defending and quick to chirp the strikers; Donovan the smooth tactician who reins them in.
 - Banter, ribbing, and the odd "back in my World Cup days…" memory are the SEASONING (about 1 in 4 lines) — the rest is real insight into why the winner won (lean on the team stats) and the prediction-league drama.
@@ -155,7 +157,7 @@ export async function generatePunditCommentary(ctx: CommentaryContext): Promise<
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return fallbackCommentary(ctx);
     const lines = parsed.filter(isValidLine).map((l) => ({ speaker: l.speaker, text: l.text.trim() }));
-    return lines.length >= 2 ? lines : fallbackCommentary(ctx);
+    return (lines.length >= 2 ? lines : fallbackCommentary(ctx)).slice(0, 6);
   } catch {
     return fallbackCommentary(ctx);
   }
