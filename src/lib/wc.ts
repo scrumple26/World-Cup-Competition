@@ -52,6 +52,32 @@ export type FriendGroup = (typeof FRIEND_GROUPS)[number];
 export const PARTICIPANT_COUNT = 16;
 export const GROUP_SIZE = 4;
 
+/** True for API-Football group-stage round strings (e.g. "Group Stage - 1"). */
+export function isGroupRound(round: string): boolean {
+  return round.startsWith("Group Stage");
+}
+
+const LIVE_STATUS = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
+const DONE_STATUS = new Set(["FT", "AET", "PEN"]);
+
+/**
+ * Which phase the overall competition is in, derived from fixtures.
+ * Knockout once any knockout fixture has kicked off/finished, or once every
+ * group-stage match is complete. Otherwise still the group phase.
+ */
+export function competitionStage(
+  matches: { round: string; status: string }[],
+): "group" | "knockout" {
+  const koStarted = matches.some(
+    (m) => !isGroupRound(m.round) && (LIVE_STATUS.has(m.status) || DONE_STATUS.has(m.status)),
+  );
+  if (koStarted) return "knockout";
+  const groupMatches = matches.filter((m) => isGroupRound(m.round));
+  const allGroupsDone =
+    groupMatches.length > 0 && groupMatches.every((m) => DONE_STATUS.has(m.status));
+  return allGroupsDone ? "knockout" : "group";
+}
+
 /** Number of best 3rd-place teams that advance to the Round of 32. */
 export const THIRD_PLACE_ADVANCING = 8;
 export const WC_GROUP_COUNT = 12;

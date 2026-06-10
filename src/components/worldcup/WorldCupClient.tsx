@@ -10,7 +10,7 @@ import { ScheduleClient } from "@/components/schedule/ScheduleClient";
 // ---- helpers ----
 
 const CT = "America/Chicago";
-const POLL_MS = 15 * 60_000;           // 15 minutes
+const POLL_MS = 60_000;                // 1 minute while matches are in play
 const POST_WINDOW_MS = 30 * 60_000;    // 30 min after last kickoff + ~95 min match
 const MATCH_DURATION_MS = 95 * 60_000; // generous max match length
 
@@ -113,10 +113,10 @@ export function WorldCupClient() {
           {pollingActive ? (
           <span className="flex items-center gap-1.5 text-xs text-green-400">
             <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-            Live · updating every 15 min
+            Live · updating every minute
           </span>
         ) : (
-          <span className="text-xs text-[var(--muted)]">Via API-Football · updates every 3 hrs</span>
+          <span className="text-xs text-[var(--muted)]">Via API-Football · live updates every minute during matches</span>
         )}
           <div className="flex gap-1 rounded-lg border border-[var(--border)] p-1">
             {TABS.map((t) => (

@@ -152,7 +152,7 @@ export async function getStandings(): Promise<ApiStandingRow[][]> {
   const resp = await apiGet<StandingsResponse[]>(
     "standings",
     { league: WC_LEAGUE_ID, season: WC_SEASON },
-    10 * 60_000,
+    60_000, // 1-min freshness so live standings polling reflects in-match changes
   );
   return resp[0]?.league.standings ?? [];
 }
