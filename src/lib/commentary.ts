@@ -75,20 +75,34 @@ function buildPrompt(ctx: CommentaryContext): string {
   }
   if (ctx.perfectPickers.length) facts.push(`Players who nailed the exact score: ${ctx.perfectPickers.join(", ")}.`);
 
+  const OPENERS = [
+    "the late drama and who it made or broke",
+    "why the winning side deserved it (or got away with one)",
+    "a standout individual performance",
+    "the prediction-league carnage — whose picks blew up",
+    "a goalkeeping or defensive talking point",
+    "an attacking moment that swung it",
+    "a hot take one of them can't wait to argue about",
+  ];
+  const opener = OPENERS[Math.floor(Math.random() * OPENERS.length)];
+  const firstSpeaker = SPEAKERS[Math.floor(Math.random() * SPEAKERS.length)];
+
   return `${PUNDIT_PROFILES}
 
-Write the desk segment about this match for the Global Football Cup (a 16-player World Cup prediction competition). Keep a light, witty tone.
+You're scripting the post-match desk for the Global Football Cup (a 16-player World Cup prediction competition). This is must-watch TV — three big personalities with real chemistry reacting to the game that just ended. Let them rip.
 
-FACTS (use ONLY these — do not invent any stat, player, goal, or event not listed):
+FACTS (every factual claim — score, players, stats, who made/lost a perfect pick — must come from here; you may dramatize, joke, and give opinions, but never invent facts):
 ${facts.map((f) => "- " + f).join("\n")}
 
 RULES:
-- 6 to 9 lines, a genuine back-and-forth: one pundit asks a question, another answers; they build on each other, agree and disagree. Conversational, not three monologues.
-- Lead with SUBSTANCE (what happened and why). Banter a bit, but it's NOT all banter — keep ribbing and the occasional World Cup recollection as seasoning (about 1 in 4 lines), not the whole thing.
-- Explain WHY the winner won using ONLY the team stats above (e.g. shots, possession). If stats are even or missing, say it was tight — don't fabricate.
-- If there was late drama, make it the centerpiece: name the player whose perfect pick was made or broken, and (if noted) that VAR was involved.
+- 7 to 10 lines of fast, lively back-and-forth. Have ${firstSpeaker} OPEN the segment, leading on ${opener} — a genuine reaction, not a dry stat — then they dig into why it happened. Take a fresh angle and fresh phrasing; don't fall back on a stock opening.
+- Make it ALIVE: react with excitement, disbelief or sympathy; address each other by name; ask each other real questions and actually answer them; interrupt, agree, and disagree.
+- Keep the voices DISTINCT: Dempsey blunt and swaggering about the attack; Howard fired up about goalkeeping/defending and quick to chirp the strikers; Donovan the smooth tactician who reins them in.
+- Banter, ribbing, and the odd "back in my World Cup days…" memory are the SEASONING (about 1 in 4 lines) — the rest is real insight into why the winner won (lean on the team stats) and the prediction-league drama.
+- If there was late drama, make it the centerpiece — name the player whose perfect pick was made or broken, and call out VAR if it was involved, with the emotion it deserves.
 - Mention a standout scorer's impact if scorers are listed.
-- Keep each line under ~240 characters. No markdown, no emojis.`;
+- Give each turn ROOM: most lines should be 2-3 full sentences (up to ~400 characters) that actually develop a point — avoid clipped one-liners. A short quip is fine occasionally for rhythm.
+- No markdown, no emojis.`;
 }
 
 interface GeminiResponse {
@@ -117,7 +131,7 @@ export async function generatePunditCommentary(ctx: CommentaryContext): Promise<
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: buildPrompt(ctx) }] }],
           generationConfig: {
-            temperature: 0.95,
+            temperature: 0.97,
             responseMimeType: "application/json",
             responseSchema: {
               type: "ARRAY",
