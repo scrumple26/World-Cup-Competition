@@ -32,6 +32,11 @@ async function handle(req: NextRequest, persistDefault: boolean) {
 
   if (!preview) {
     await db.collection("weeklyTimes").doc(times.id).set(times);
+    // Snapshot current WC group ranks so next week can compute climbers.
+    await db.collection("wcSnapshots").doc(times.weekEnd).set({
+      createdAt: new Date().toISOString(),
+      ranks: data.wcRanks,
+    });
   }
 
   return NextResponse.json({

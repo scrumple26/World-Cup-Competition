@@ -73,6 +73,7 @@ export interface WcResult {
   awayLogo?: string;
   homeScore: number;
   awayScore: number;
+  round?: string;
   date: string; // ISO
 }
 
@@ -107,6 +108,7 @@ export interface FeedPost {
 export interface FeedEntry {
   fixtureId: number;
   kickoff: string; // ISO
+  round?: string;  // API-Football round, e.g. "Round of 16"
   homeTeam: string;
   awayTeam: string;
   homeLogo: string;

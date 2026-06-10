@@ -191,6 +191,7 @@ export async function generateFeedEntries(
     const entry: FeedEntry = {
       fixtureId: match.id,
       kickoff: match.kickoff,
+      round: match.round,
       homeTeam: match.homeTeamName,
       awayTeam: match.awayTeamName,
       homeLogo: match.homeLogo,

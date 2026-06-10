@@ -132,11 +132,11 @@ export function WeeklyTimesCard({ times, defaultExpanded = false }: { times: Wee
           {/* Friendly competition group standings — below the conversation */}
           {times.groups.length > 0 && (
             <div>
-              <div className="mb-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">— League Standings —</div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="mb-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">— Global Football Cup Standings —</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                 {times.groups.map((g) => <GroupTable key={g.group} g={g} />)}
               </div>
-              <p className="mt-1 text-center text-[10px] text-[var(--muted)]">Friendly competition · ▲/▼ = movement since last week</p>
+              <p className="mt-1 text-center text-[10px] text-[var(--muted)]">▲/▼ = movement since last week</p>
             </div>
           )}
         </div>

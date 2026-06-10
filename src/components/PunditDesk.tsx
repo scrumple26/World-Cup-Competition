@@ -70,7 +70,7 @@ export function PunditDesk({ lines, match }: { lines: PunditLine[]; match?: Pund
       <div className="mb-3 flex items-center gap-3 border-b border-[var(--border)] pb-3">
         <div className="flex -space-x-3">
           {(Object.keys(PUNDITS) as PunditSpeaker[]).map((s) => (
-            <Avatar key={s} speaker={s} size={56} />
+            <Avatar key={s} speaker={s} size={64} />
           ))}
         </div>
         <div>
@@ -85,7 +85,7 @@ export function PunditDesk({ lines, match }: { lines: PunditLine[]; match?: Pund
           const p = PUNDITS[l.speaker];
           return (
             <div key={i} className="flex items-start gap-3">
-              <Avatar speaker={l.speaker} size={44} />
+              <Avatar speaker={l.speaker} size={56} />
               <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm bg-[var(--bg-card)] px-3 py-2">
                 <div className="text-xs font-bold text-[var(--accent)]">{p.short}</div>
                 <p className="text-sm leading-snug text-[var(--fg)]">{l.text}</p>

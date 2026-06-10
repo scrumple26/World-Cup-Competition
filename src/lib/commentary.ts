@@ -77,14 +77,14 @@ function buildPrompt(ctx: CommentaryContext): string {
 
   return `${PUNDIT_PROFILES}
 
-Write the desk segment about this match for a friends' World Cup prediction league.
+Write the desk segment about this match for the Global Football Cup (a 16-player World Cup prediction competition). Keep a light, witty tone.
 
 FACTS (use ONLY these — do not invent any stat, player, goal, or event not listed):
 ${facts.map((f) => "- " + f).join("\n")}
 
 RULES:
-- 6 to 9 lines, a genuine back-and-forth: one pundit asks a question, another answers; they interrupt, agree and disagree. Conversational, not three separate monologues.
-- They should rib and tease each other, and occasionally (not every line) recollect their own World Cup playing days.
+- 6 to 9 lines, a genuine back-and-forth: one pundit asks a question, another answers; they build on each other, agree and disagree. Conversational, not three monologues.
+- Lead with SUBSTANCE (what happened and why). Banter a bit, but it's NOT all banter — keep ribbing and the occasional World Cup recollection as seasoning (about 1 in 4 lines), not the whole thing.
 - Explain WHY the winner won using ONLY the team stats above (e.g. shots, possession). If stats are even or missing, say it was tight — don't fabricate.
 - If there was late drama, make it the centerpiece: name the player whose perfect pick was made or broken, and (if noted) that VAR was involved.
 - Mention a standout scorer's impact if scorers are listed.

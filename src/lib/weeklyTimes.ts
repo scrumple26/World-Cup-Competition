@@ -1,7 +1,9 @@
 import "server-only";
 
 import type { Firestore } from "firebase-admin/firestore";
-import { FRIEND_GROUPS } from "./wc";
+import { FRIEND_GROUPS, isGroupRound } from "./wc";
+import { getStandings } from "./apiFootball";
+import { toGroupStandings } from "./wcMap";
 import { PUNDIT_PROFILES } from "./commentary";
 import type {
   WeeklyTimes, WeeklyGroup, WeeklyGroupTeam, WeeklyStatLine, WcResult,
@@ -40,6 +42,13 @@ export interface WeeklyData {
   closeRaces: string[];
   movers: string[];
   matchesPlayed: number;
+  // World Cup watch (pundit context only — not displayed as tables)
+  wcGroupLeaders: string[];
+  wcClimbers: string[];
+  wcKnockoutWinners: string[];
+  speculationCue: string | null;
+  /** Current WC group ranks, persisted as a snapshot to compute next week's climbers. */
+  wcRanks: Record<string, Record<string, number>>;
 }
 
 /** Gather everything the newspaper needs — centered on the friends' league. */
@@ -100,7 +109,8 @@ export async function gatherWeeklyData(db: Firestore): Promise<WeeklyData> {
     wcResults.push({
       homeTeam: e.homeTeam, awayTeam: e.awayTeam,
       homeLogo: e.homeLogo, awayLogo: e.awayLogo,
-      homeScore: e.homeScore, awayScore: e.awayScore, date: e.kickoff,
+      homeScore: e.homeScore, awayScore: e.awayScore,
+      round: e.round, date: e.kickoff,
     });
     for (const u of e.perUser) {
       const p = ptsByTeam.get(u.teamName) ?? { pts: 0, logo: u.logoUrl };
@@ -140,7 +150,52 @@ export async function gatherWeeklyData(db: Firestore): Promise<WeeklyData> {
     }
   }
 
-  return { weekStart, weekEnd, groups, wcResults, topPoints, topPerfects, closeRaces, movers, matchesPlayed };
+  // --- World Cup watch: standings context for pundit speculation ---
+  const wcGroupLeaders: string[] = [];
+  const wcClimbers: string[] = [];
+  const wcKnockoutWinners: string[] = [];
+  let speculationCue: string | null = null;
+  const wcRanks: Record<string, Record<string, number>> = {};
+
+  const wcStandings = toGroupStandings(await getStandings().catch(() => []));
+  if (wcStandings.length) {
+    const snap = await db.collection("wcSnapshots").orderBy("createdAt", "desc").limit(1).get().catch(() => null);
+    const prev = snap && !snap.empty ? (snap.docs[0].data() as { ranks?: Record<string, Record<string, number>> }).ranks : undefined;
+
+    for (const g of wcStandings) {
+      wcRanks[g.group] = {};
+      g.rows.forEach((r) => { wcRanks[g.group][r.teamName] = r.rank; });
+      if (g.rows[0]) {
+        wcGroupLeaders.push(`${g.group}: ${g.rows[0].teamName} top${g.rows[1] ? `, ${g.rows[1].teamName} 2nd` : ""}`);
+      }
+      for (const r of g.rows) {
+        const prevRank = prev?.[g.group]?.[r.teamName];
+        if (prevRank != null && r.rank < prevRank) wcClimbers.push(`${r.teamName} climbed to ${r.rank}${ordSuffix(r.rank)} in ${g.group}`);
+      }
+    }
+
+    // Random speculation cue (~65% of editions) on a real group or knockout race.
+    if (Math.random() < 0.65) {
+      const withTwo = wcStandings.filter((g) => g.rows.length >= 2);
+      if (withTwo.length) {
+        const g = withTwo[Math.floor(Math.random() * withTwo.length)];
+        speculationCue = `You MAY speculate (opinion, clearly as a prediction) on whether ${g.rows[0].teamName} or ${g.rows[1].teamName} can win ${g.group} or advance to the knockout round.`;
+      }
+    }
+  }
+
+  // Knockout winners from this week's results.
+  for (const r of wcResults) {
+    if (r.round && !isGroupRound(r.round) && r.homeScore !== r.awayScore) {
+      const winner = r.homeScore > r.awayScore ? r.homeTeam : r.awayTeam;
+      wcKnockoutWinners.push(`${winner} won their ${r.round} match`);
+    }
+  }
+
+  return {
+    weekStart, weekEnd, groups, wcResults, topPoints, topPerfects, closeRaces, movers, matchesPlayed,
+    wcGroupLeaders, wcClimbers, wcKnockoutWinners, speculationCue, wcRanks,
+  };
 }
 
 // ── AI newspaper text ─────────────────────────────────────────────────────────
@@ -154,7 +209,7 @@ interface NewspaperText {
 
 function factSheet(d: WeeklyData): string {
   const f: string[] = [];
-  f.push("This is the friends' prediction league (16 players in 4 groups, A–D). Focus the paper on THEM.");
+  f.push("This is the Global Football Cup — a 16-player World Cup 2026 prediction competition in 4 groups (A–D). Always call it the Global Football Cup (never a 'friends league' or 'prediction league'). Focus the paper on these players, with a light, witty tone.");
   f.push("IMPORTANT: points equal = a TIE. A 0-point gap is NOT a lead — never say a team 'leads by 0'; say they are tied/level.");
   const leaders = d.groups.map((g) => {
     if (!g.teams[0]) return "";
@@ -170,6 +225,10 @@ function factSheet(d: WeeklyData): string {
   if (d.movers.length) f.push("Standings movement: " + d.movers.slice(0, 10).join("; ") + ".");
   if (d.closeRaces.length) f.push("Tight races: " + d.closeRaces.join(" "));
   if (d.wcResults.length) f.push("Real World Cup results this week (backdrop): " + d.wcResults.map((r) => `${r.homeTeam} ${r.homeScore}-${r.awayScore} ${r.awayTeam}`).join(", ") + ".");
+  if (d.wcKnockoutWinners.length) f.push("Knockout winners: " + d.wcKnockoutWinners.join("; ") + ".");
+  if (d.wcClimbers.length) f.push("WC teams that climbed their group: " + d.wcClimbers.slice(0, 10).join("; ") + ".");
+  if (d.wcGroupLeaders.length) f.push("Current WC group leaders: " + d.wcGroupLeaders.slice(0, 12).join("; ") + ".");
+  if (d.speculationCue) f.push("SPECULATION: " + d.speculationCue);
   if (!d.matchesPlayed) f.push("No matches were scored this week — keep it light and look ahead.");
   return f.join("\n");
 }
@@ -180,7 +239,7 @@ async function generateNewspaperText(d: WeeklyData): Promise<NewspaperText> {
 
   const prompt = `${PUNDIT_PROFILES}
 
-You are writing this week's edition of "The Global Football Cup Times" — a tongue-in-cheek newspaper for a 16-person friends' World Cup 2026 prediction league. Players score points by predicting match results; an exact score is a "perfect game". The paper is MOSTLY about the friends' competition; real World Cup results are just the backdrop.
+You are writing this week's edition of "The Global Football Cup Times" — a witty newspaper for the Global Football Cup, a 16-player World Cup 2026 prediction competition (4 groups, A–D). Players score points by predicting match results; an exact score is a "perfect game". The paper is MOSTLY about the Global Football Cup race; real World Cup results are just the backdrop. Keep a light, humorous tone throughout — never call it a "friends league".
 
 FACTS (use ONLY these — never invent players, scores, standings, or events not listed):
 ${factSheet(d)}
@@ -188,9 +247,12 @@ ${factSheet(d)}
 Produce:
 - headline: a punchy front-page headline about the friends' league this week.
 - subhead: a one-sentence deck.
-- body: 2-4 short newspaper paragraphs about the friends' race — who surged, perfect games, group movement, tightest battles. Reference the real WC results only as context. No markdown.
-- punditColumn: a LONGER, genuinely conversational exchange of 8-12 lines among the three pundits about the friends' league. Make it feel like a real desk chat: one pundit asks a question and another answers, they interrupt, agree, and DISAGREE. They should rib and tease each other, and occasionally (not constantly) recollect their own World Cup playing days. Each line under ~240 chars.
-Do not fabricate anything beyond the FACTS.`;
+- body: 2-4 short, witty newspaper paragraphs about the Global Football Cup race — who surged, perfect games, group movement, tightest battles. Reference the real WC results only as context. No markdown.
+- punditColumn: a LONGER, genuinely conversational exchange of 8-12 lines among the three pundits. Make it a real desk chat: one pundit asks a question and another answers, they build on each other, agree and disagree.
+  * Lead with SUBSTANCE — analyze the Global Football Cup race, and also work in the real World Cup: call out teams that climbed their group or won their knockout match, and if a SPECULATION fact is provided, have them give their take on whether that team can win its group / advance.
+  * Banter a bit, but it's NOT all banter — keep ribbing and the occasional World Cup recollection as seasoning (roughly 1 in 4 lines), not the whole conversation.
+  * Each line under ~240 chars.
+Do not fabricate anything beyond the FACTS (you MAY give clearly-framed opinions/predictions only when a SPECULATION fact invites it).`;
 
   try {
     const res = await fetch(
