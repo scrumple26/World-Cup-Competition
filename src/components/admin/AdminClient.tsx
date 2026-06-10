@@ -36,6 +36,7 @@ export function AdminClient() {
   const [punditBusy, setPunditBusy] = useState(false);
   const [punditFixtureId, setPunditFixtureId] = useState("");
   const [punditNote, setPunditNote] = useState<string | null>(null);
+  const [punditMatch, setPunditMatch] = useState<{ homeTeam: string; awayTeam: string; homeScore: number; awayScore: number } | null>(null);
   const [weeklyTimes, setWeeklyTimes] = useState<WeeklyTimes | null>(null);
   const [weeklyBusy, setWeeklyBusy] = useState(false);
   const [weeklyNote, setWeeklyNote] = useState<string | null>(null);
@@ -86,6 +87,7 @@ export function AdminClient() {
       const r = await generatePunditTest(args);
       if (!r.ok) { setPunditNote(`Failed: ${r.error ?? "unknown error"}`); return; }
       setPunditLines(r.commentary ?? []);
+      setPunditMatch(r.match ?? null);
       setPunditNote(r.hasKey
         ? "Generated with Gemini."
         : "No GEMINI_API_KEY set — showing the templated fallback. Add the key to see AI commentary.");
@@ -198,7 +200,7 @@ export function AdminClient() {
         {punditNote && <p className="mt-2 text-xs text-[var(--muted)]">{punditNote}</p>}
         {punditLines && punditLines.length > 0 && (
           <div className="mt-3">
-            <PunditDesk lines={punditLines} />
+            <PunditDesk lines={punditLines} match={punditMatch ?? undefined} />
           </div>
         )}
       </section>

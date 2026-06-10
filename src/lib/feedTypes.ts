@@ -49,13 +49,13 @@ export interface WeeklyGroupTeam {
   team: string;
   logo?: string;
   rank: number;
-  prevRank: number | null; // rank at the start of the week; null if no prior snapshot
+  prevRank: number | null; // rank at the start of the week; null if unknown
   points: number;
-  played: number;
+  weekPts?: number; // points gained this week
 }
 
 export interface WeeklyGroup {
-  group: string; // e.g. "Group A"
+  group: string; // friendly competition group, e.g. "Group A"
   teams: WeeklyGroupTeam[];
 }
 
@@ -63,6 +63,17 @@ export interface WeeklyStatLine {
   teamName: string;
   logoUrl?: string;
   value: number;
+}
+
+/** A real World Cup result from the week, for the "around the tournament" section. */
+export interface WcResult {
+  homeTeam: string;
+  awayTeam: string;
+  homeLogo?: string;
+  awayLogo?: string;
+  homeScore: number;
+  awayScore: number;
+  date: string; // ISO
 }
 
 /** One weekly newspaper edition, stored in the `weeklyTimes` collection. */
@@ -74,7 +85,8 @@ export interface WeeklyTimes {
   subhead?: string;
   body: string[];    // AI-written newspaper paragraphs
   punditColumn: PunditLine[];
-  groups: WeeklyGroup[];
+  groups: WeeklyGroup[];         // friendly competition groups (A–D)
+  wcResults: WcResult[];         // real World Cup results from the week
   topPoints: WeeklyStatLine[];   // most points gained this week
   topPerfects: WeeklyStatLine[]; // most perfect games this week
   closeRaces: string[];          // tight races worth watching

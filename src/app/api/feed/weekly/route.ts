@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
-import { gatherWeeklyData, buildWeeklyTimes, snapshotFromGroups } from "@/lib/weeklyTimes";
+import { gatherWeeklyData, buildWeeklyTimes } from "@/lib/weeklyTimes";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,6 @@ async function handle(req: NextRequest, persistDefault: boolean) {
 
   if (!preview) {
     await db.collection("weeklyTimes").doc(times.id).set(times);
-    await db.collection("weeklySnapshots").doc(times.weekEnd).set(snapshotFromGroups(data.groups));
   }
 
   return NextResponse.json({

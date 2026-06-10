@@ -37,33 +37,57 @@ function Avatar({ speaker, size }: { speaker: PunditSpeaker; size: number }) {
   );
 }
 
-export function PunditDesk({ lines }: { lines: PunditLine[] }) {
+export interface PunditMatch {
+  homeTeam: string;
+  awayTeam: string;
+  homeLogo?: string;
+  awayLogo?: string;
+  homeScore: number;
+  awayScore: number;
+}
+
+export function PunditDesk({ lines, match }: { lines: PunditLine[]; match?: PunditMatch }) {
   if (!lines || lines.length === 0) return null;
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elev)] p-3">
-      {/* Desk header — sizeable headshots */}
+      {/* Optional score strip with country flags */}
+      {match && (
+        <div className="mb-3 flex items-center justify-center gap-3 rounded-lg bg-[var(--bg-card)] px-3 py-2">
+          <div className="flex flex-1 items-center justify-end gap-2 truncate">
+            <span className="truncate text-sm font-semibold">{match.homeTeam}</span>
+            {match.homeLogo && <img src={match.homeLogo} alt="" className="h-7 w-7 flex-shrink-0 object-contain" />}
+          </div>
+          <span className="font-mono text-xl font-black tabular-nums">{match.homeScore} – {match.awayScore}</span>
+          <div className="flex flex-1 items-center gap-2 truncate">
+            {match.awayLogo && <img src={match.awayLogo} alt="" className="h-7 w-7 flex-shrink-0 object-contain" />}
+            <span className="truncate text-sm font-semibold">{match.awayTeam}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Desk header — big headshots */}
       <div className="mb-3 flex items-center gap-3 border-b border-[var(--border)] pb-3">
-        <div className="flex -space-x-2">
+        <div className="flex -space-x-3">
           {(Object.keys(PUNDITS) as PunditSpeaker[]).map((s) => (
-            <Avatar key={s} speaker={s} size={40} />
+            <Avatar key={s} speaker={s} size={56} />
           ))}
         </div>
         <div>
-          <div className="text-sm font-bold leading-tight">The Pundit Desk</div>
+          <div className="text-base font-bold leading-tight">The Pundit Desk</div>
           <div className="text-[11px] text-[var(--muted)]">Dempsey · Howard · Donovan break it down</div>
         </div>
       </div>
 
       {/* Dialogue */}
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         {lines.map((l, i) => {
           const p = PUNDITS[l.speaker];
           return (
-            <div key={i} className="flex items-start gap-2.5">
-              <Avatar speaker={l.speaker} size={32} />
-              <div className="min-w-0">
-                <div className="text-[11px] font-semibold text-[var(--accent)]">{p.short}</div>
+            <div key={i} className="flex items-start gap-3">
+              <Avatar speaker={l.speaker} size={44} />
+              <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm bg-[var(--bg-card)] px-3 py-2">
+                <div className="text-xs font-bold text-[var(--accent)]">{p.short}</div>
                 <p className="text-sm leading-snug text-[var(--fg)]">{l.text}</p>
               </div>
             </div>

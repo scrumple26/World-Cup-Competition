@@ -87,6 +87,24 @@ export function WeeklyTimesCard({ times, defaultExpanded = false }: { times: Wee
             </p>
           ))}
 
+          {/* Around the World Cup this week */}
+          {times.wcResults && times.wcResults.length > 0 && (
+            <div>
+              <div className="mb-1 border-b border-[var(--fg)]/40 pb-0.5 text-xs font-bold uppercase tracking-wide">Around the World Cup This Week</div>
+              <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                {times.wcResults.map((r, i) => (
+                  <div key={i} className="flex items-center gap-1.5 py-0.5 text-[12px]">
+                    {r.homeLogo && <img src={r.homeLogo} alt="" className="h-4 w-4 object-contain" />}
+                    <span className="flex-1 truncate text-right">{r.homeTeam}</span>
+                    <span className="font-bold tabular-nums">{r.homeScore}–{r.awayScore}</span>
+                    <span className="flex-1 truncate">{r.awayTeam}</span>
+                    {r.awayLogo && <img src={r.awayLogo} alt="" className="h-4 w-4 object-contain" />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Top points / perfects */}
           <div className="grid grid-cols-2 gap-4">
             <StatList title="Most Points This Week" lines={times.topPoints} suffix=" pts" />
@@ -103,22 +121,22 @@ export function WeeklyTimesCard({ times, defaultExpanded = false }: { times: Wee
             </div>
           )}
 
-          {/* Group standings with movement */}
-          {times.groups.length > 0 && (
-            <div>
-              <div className="mb-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">— Group Standings —</div>
-              <div className="columns-2 gap-4 sm:columns-3 [&>*]:mb-3">
-                {times.groups.map((g) => <GroupTable key={g.group} g={g} />)}
-              </div>
-              <p className="mt-1 text-center text-[10px] text-[var(--muted)]">▲/▼ = position change since last week</p>
-            </div>
-          )}
-
-          {/* Pundit column */}
+          {/* Pundit conversation */}
           {times.punditColumn.length > 0 && (
             <div>
               <div className="mb-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">— From the Desk —</div>
               <PunditDesk lines={times.punditColumn} />
+            </div>
+          )}
+
+          {/* Friendly competition group standings — below the conversation */}
+          {times.groups.length > 0 && (
+            <div>
+              <div className="mb-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">— League Standings —</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {times.groups.map((g) => <GroupTable key={g.group} g={g} />)}
+              </div>
+              <p className="mt-1 text-center text-[10px] text-[var(--muted)]">Friendly competition · ▲/▼ = movement since last week</p>
             </div>
           )}
         </div>

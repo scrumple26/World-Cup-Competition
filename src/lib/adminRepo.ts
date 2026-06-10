@@ -131,9 +131,12 @@ export async function deleteFeedPost(id: string): Promise<AdminResult> {
   return { ok: res.ok, error: data.error };
 }
 
+export interface PunditTestMatch {
+  homeTeam: string; awayTeam: string; homeScore: number; awayScore: number;
+}
 export async function generatePunditTest(
   args: { sample?: boolean; fixtureId?: number },
-): Promise<{ ok: boolean; commentary?: PunditLine[]; hasKey?: boolean; error?: string }> {
+): Promise<{ ok: boolean; commentary?: PunditLine[]; match?: PunditTestMatch; hasKey?: boolean; error?: string }> {
   const token = await adminToken();
   const res = await fetch("/api/admin/commentary", {
     method: "POST",
@@ -142,8 +145,12 @@ export async function generatePunditTest(
   });
   const data = (await res.json().catch(() => ({}))) as {
     commentary?: PunditLine[]; hasKey?: boolean; error?: string;
+    context?: { homeTeam: string; awayTeam: string; homeScore: number; awayScore: number };
   };
-  return { ok: res.ok, commentary: data.commentary, hasKey: data.hasKey, error: data.error };
+  const match = data.context
+    ? { homeTeam: data.context.homeTeam, awayTeam: data.context.awayTeam, homeScore: data.context.homeScore, awayScore: data.context.awayScore }
+    : undefined;
+  return { ok: res.ok, commentary: data.commentary, match, hasKey: data.hasKey, error: data.error };
 }
 
 export async function generateWeeklyTimesTest(

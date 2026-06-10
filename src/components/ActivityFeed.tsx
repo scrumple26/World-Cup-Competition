@@ -178,7 +178,10 @@ function FeedCard({ entry, myUid, spoilerMode }: { entry: FeedEntry; myUid?: str
       {/* Pundit desk reaction */}
       {entry.commentary && entry.commentary.length > 0 && (
         <div className="border-t border-[var(--border)] px-4 py-3">
-          <PunditDesk lines={entry.commentary} />
+          <PunditDesk
+            lines={entry.commentary}
+            match={{ homeTeam, awayTeam, homeLogo, awayLogo, homeScore, awayScore }}
+          />
         </div>
       )}
         </>

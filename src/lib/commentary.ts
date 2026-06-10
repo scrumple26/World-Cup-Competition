@@ -83,7 +83,8 @@ FACTS (use ONLY these — do not invent any stat, player, goal, or event not lis
 ${facts.map((f) => "- " + f).join("\n")}
 
 RULES:
-- 5 to 7 short lines total, alternating speakers, conversational and fun.
+- 6 to 9 lines, a genuine back-and-forth: one pundit asks a question, another answers; they interrupt, agree and disagree. Conversational, not three separate monologues.
+- They should rib and tease each other, and occasionally (not every line) recollect their own World Cup playing days.
 - Explain WHY the winner won using ONLY the team stats above (e.g. shots, possession). If stats are even or missing, say it was tight — don't fabricate.
 - If there was late drama, make it the centerpiece: name the player whose perfect pick was made or broken, and (if noted) that VAR was involved.
 - Mention a standout scorer's impact if scorers are listed.
