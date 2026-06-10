@@ -207,7 +207,7 @@ export function AdminClient() {
 
       {/* Weekly newspaper tester */}
       <section className="card p-4">
-        <h2 className="mb-1 font-semibold">Global Football Cup Times (test)</h2>
+        <h2 className="mb-1 font-semibold">Pundit Football Times (test)</h2>
         <p className="mb-3 text-sm text-[var(--muted)]">
           Preview this week&apos;s AI newspaper edition from live data (group movement, top points,
           perfect games, close races). This preview is <b>not</b> saved to the feed. The real edition

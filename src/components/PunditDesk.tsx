@@ -73,8 +73,10 @@ export function PunditDesk({ lines, match }: { lines: PunditLine[]; match?: Pund
             <Avatar key={s} speaker={s} size={64} />
           ))}
         </div>
-        <div>
-          <div className="text-base font-bold leading-tight">The Pundit Desk</div>
+        <div className="min-w-0">
+          <div className="truncate text-base font-bold leading-tight">
+            {match ? `Pundit Recap: ${match.homeTeam} vs ${match.awayTeam}` : "The Pundit Desk"}
+          </div>
           <div className="text-[11px] text-[var(--muted)]">Dempsey · Howard · Donovan break it down</div>
         </div>
       </div>

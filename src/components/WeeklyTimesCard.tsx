@@ -62,22 +62,30 @@ export function WeeklyTimesCard({ times, defaultExpanded = false }: { times: Wee
 
   return (
     <div className="card overflow-hidden bg-[var(--bg-card)] font-serif">
-      {/* Masthead — click to toggle */}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="block w-full border-b-2 border-double border-[var(--fg)] px-4 py-3 text-center"
-      >
-        <div className="border-b border-[var(--fg)]/30 pb-1.5">
-          <div className="font-news text-2xl font-black leading-none tracking-tight sm:text-3xl">The Global Football Cup Times</div>
-        </div>
-        <div className="font-news my-2 text-lg font-extrabold leading-tight sm:text-xl">{times.headline}</div>
-        {times.subhead && <div className="font-news text-xs italic text-[var(--muted)]">{times.subhead}</div>}
-        <div className="mt-1 flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-[var(--muted)]">
-          <span>{dateStr}</span>
-          <span>·</span>
-          <span className="text-[var(--accent)]">{open ? "Close" : "Read full edition ▾"}</span>
-        </div>
+      {/* Click to toggle. Collapsed = title row only; expanded = full masthead. */}
+      <button type="button" onClick={() => setOpen((o) => !o)} className="block w-full text-left">
+        {open ? (
+          <div className="border-b-2 border-double border-[var(--fg)] px-4 py-3 text-center">
+            <div className="border-b border-[var(--fg)]/30 pb-1.5">
+              <div className="font-news text-2xl font-black leading-none tracking-tight sm:text-3xl">Pundit Football Times</div>
+            </div>
+            <div className="font-news my-2 text-lg font-extrabold leading-tight sm:text-xl">{times.headline}</div>
+            {times.subhead && <div className="font-news text-xs italic text-[var(--muted)]">{times.subhead}</div>}
+            <div className="mt-1 flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-[var(--muted)]">
+              <span>{dateStr}</span><span>·</span>
+              <span className="text-[var(--accent)]">Close ▴</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--bg-elev)]">
+            <span className="text-xl">📰</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-news text-base font-black leading-tight sm:text-lg">Pundit Football Times</div>
+              <div className="truncate text-[11px] text-[var(--muted)]">{dateStr} · weekly edition</div>
+            </div>
+            <span className="whitespace-nowrap text-xs font-semibold text-[var(--accent)]">Read edition ▾</span>
+          </div>
+        )}
       </button>
 
       {open && (

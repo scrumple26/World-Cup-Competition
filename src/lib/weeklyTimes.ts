@@ -234,7 +234,7 @@ async function generateNewspaperText(d: WeeklyData): Promise<NewspaperText> {
 
   const prompt = `${PUNDIT_PROFILES}
 
-You are writing this week's edition of "The Global Football Cup Times" — a witty newspaper for the Global Football Cup, a 16-player World Cup 2026 prediction competition (4 groups, A–D). Players score points by predicting match results; an exact score is a "perfect game". The paper is MOSTLY about the Global Football Cup race; real World Cup results are just the backdrop. Keep a light, humorous tone throughout — never call it a "friends league".
+You are writing this week's edition of "Pundit Football Times" — a witty newspaper for the Global Football Cup, a 16-player World Cup 2026 prediction competition (4 groups, A–D). Players score points by predicting match results; an exact score is a "perfect game". The paper is MOSTLY about the Global Football Cup race; real World Cup results are just the backdrop. Keep a light, humorous tone throughout — never call it a "friends league".
 
 FACTS (use ONLY these — never invent players, scores, standings, or events not listed):
 ${factSheet(d)}
@@ -243,7 +243,7 @@ Produce:
 - headline: a punchy front-page headline about the friends' league this week.
 - subhead: a one-sentence deck.
 - body: 2-4 short, witty newspaper paragraphs about the Global Football Cup race — who surged, perfect games, group movement, tightest battles. Reference the real WC results only as context. No markdown.
-- punditColumn: a LONGER, genuinely conversational exchange of 8-12 lines among the three pundits. Make it a real desk chat: one pundit asks a question and another answers, they build on each other, agree and disagree.
+- punditColumn: a tight, conversational exchange of EXACTLY 6 lines among the three pundits (no more). Make it a real desk chat: one pundit asks a question and another answers, they build on each other, agree and disagree.
   * Lead with SUBSTANCE — analyze the Global Football Cup race, and also work in the real World Cup: call out teams that climbed their group or won their knockout match, and if a SPECULATION fact is provided, have them give their take on whether that team can win its group / advance.
   * Banter a bit, but it's NOT all banter — keep ribbing and the occasional World Cup recollection as seasoning (roughly 1 in 4 lines), not the whole conversation.
   * Each line under ~240 chars.
@@ -296,7 +296,7 @@ Do not fabricate anything beyond the FACTS (you MAY give clearly-framed opinions
       headline: parsed.headline,
       subhead: parsed.subhead ?? "",
       body,
-      punditColumn: punditColumn.length ? punditColumn : fallbackNewspaper(d).punditColumn,
+      punditColumn: (punditColumn.length ? punditColumn : fallbackNewspaper(d).punditColumn).slice(0, 6),
     };
   } catch {
     return fallbackNewspaper(d);
