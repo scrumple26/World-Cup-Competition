@@ -168,7 +168,14 @@ export async function autoFillMissingPredictions(
  */
 export async function recomputeAllScores(db: Firestore): Promise<number> {
   const actual = await loadActual(db);
-  const usersSnap = await db.collection("users").get();
+  // Batch-read all existing scores once (for history carry-forward) instead of
+  // a separate read per user inside the loop.
+  const [usersSnap, scoresSnap] = await Promise.all([
+    db.collection("users").get(),
+    db.collection("scores").get(),
+  ]);
+  const prevByUid = new Map<string, ScoreDoc>();
+  scoresSnap.forEach((d) => prevByUid.set(d.id, d.data() as ScoreDoc));
   const today = new Date().toISOString().slice(0, 10);
 
   let count = 0;
@@ -180,7 +187,7 @@ export async function recomputeAllScores(db: Firestore): Promise<number> {
       const s = computeUserScore(actual, preds);
 
       const ref = db.collection("scores").doc(uid);
-      const prev = (await ref.get()).data() as ScoreDoc | undefined;
+      const prev = prevByUid.get(uid);
       const history = prev?.history ? [...prev.history] : [];
       const lastIdx = history.length - 1;
       if (lastIdx >= 0 && history[lastIdx].date === today) {

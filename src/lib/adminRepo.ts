@@ -233,6 +233,19 @@ export async function unlockUser(uid: string): Promise<AdminResult> {
   return post("/api/admin/unlock", { uid });
 }
 
+export async function getPredCounts(
+  uids: string[],
+): Promise<Record<string, { matches: number; locked: boolean }>> {
+  const token = await adminToken();
+  const res = await fetch("/api/admin/pred-counts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ uids }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { counts?: Record<string, { matches: number; locked: boolean }> };
+  return data.counts ?? {};
+}
+
 export async function removeUser(uid: string): Promise<AdminResult> {
   if (USE_MOCK) return { ok: true, mock: true };
   const token = await adminToken();

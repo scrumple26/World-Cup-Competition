@@ -51,24 +51,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Load all wcMatches for auto-fill and feed generation
-    const wcSnap = await db.collection("wcMatches").get();
+    // Load all wcMatches + existing feed ids
+    const [wcSnap, feedSnap] = await Promise.all([
+      db.collection("wcMatches").get(),
+      db.collection("feedEntries").get(),
+    ]);
     const wcMatches = wcSnap.docs.map((d) => d.data() as WcMatch);
-
-    // Auto-fill any missing predictions
-    const autoFilled = await autoFillMissingPredictions(db, wcMatches);
-
-    // Generate feed entries for completed matches that don't have one yet
-    const feedSnap = await db.collection("feedEntries").get();
     const existingFeedIds = new Set(feedSnap.docs.map((d) => d.id));
     const playedStatuses = new Set(["FT", "AET", "PEN"]);
     const needsFeed = wcMatches.filter(
       (m) => playedStatuses.has(m.status) && !existingFeedIds.has(String(m.id)),
     );
+
+    // Nothing newly completed → no scores can have changed. Skip the heavy
+    // auto-fill + feed + full recompute entirely. (The 3-hour cron still does a
+    // periodic full recompute as a safety net.)
+    if (needsFeed.length === 0) {
+      return NextResponse.json({ ok: true, skipped: true, reason: "no newly completed matches" });
+    }
+
+    // Auto-fill any missing predictions, then build feeds + recompute.
+    const autoFilled = await autoFillMissingPredictions(db, wcMatches);
     const usersSnap = await db.collection("users").get();
     const feedCount = await generateFeedEntries(db, needsFeed, usersSnap);
-
-    // Recompute everyone's scores
     const scored = await recomputeAllScores(db);
 
     return NextResponse.json({ ok: true, autoFilled, feedCount, usersScored: scored });

@@ -7,7 +7,7 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, getReminderStatus, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockUser, uploadTeamLogo, type ReminderStatus } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, getPredCounts, getReminderStatus, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockUser, uploadTeamLogo, type ReminderStatus } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PunditDesk } from "@/components/PunditDesk";
@@ -69,20 +69,16 @@ export function AdminClient() {
   // Whether the scheduled prediction reminders have actually gone out.
   useEffect(() => { getReminderStatus().then(setReminderStatus).catch(() => {}); }, []);
 
-  // Load prediction counts + lock status for each player
+  // Load prediction counts + lock status for each player in ONE batched call
+  // (aggregation count() — cheap), instead of reading every player's full set.
   useEffect(() => {
     if (!league) return;
-    Promise.all(
-      league.users.map(u =>
-        fetch(`/api/predictions?uid=${u.uid}`)
-          .then(r => r.json())
-          .then(d => [u.uid, Object.keys(d.matches ?? {}).length, !!d.userLocked] as [string, number, boolean])
-          .catch(() => [u.uid, 0, false] as [string, number, boolean])
-      )
-    ).then(entries => {
-      setPredCounts(Object.fromEntries(entries.map(([uid, count]) => [uid, count])));
-      setLockStatus(Object.fromEntries(entries.map(([uid, , locked]) => [uid, locked])));
-    });
+    getPredCounts(league.users.map(u => u.uid))
+      .then(counts => {
+        setPredCounts(Object.fromEntries(Object.entries(counts).map(([uid, c]) => [uid, c.matches])));
+        setLockStatus(Object.fromEntries(Object.entries(counts).map(([uid, c]) => [uid, c.locked])));
+      })
+      .catch(() => {});
   }, [league]);
 
   if (!user?.isAdmin) {

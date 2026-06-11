@@ -5,10 +5,27 @@ import type { ScoreDoc, UserProfile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/league — returns all users + scores (Admin SDK, no auth required). */
+interface LeaguePayload {
+  users: UserProfile[];
+  scores: Record<string, ScoreDoc>;
+  playedMatchCount: number;
+  totalMatchCount: number;
+}
+
+// Short in-memory cache: the dashboard, leaderboard, competition and admin
+// pages all hit this. Within a warm instance, repeated calls reuse one read
+// batch instead of re-reading users + scores + matches every time.
+let cache: { payload: LeaguePayload; expires: number } | null = null;
+const TTL_MS = 30_000;
+
+/** GET /api/league — all users + scores (Admin SDK, no auth required). Cached ~30s. */
 export async function GET() {
+  if (cache && cache.expires > Date.now()) {
+    return NextResponse.json(cache.payload);
+  }
+
   const db = getAdminDb();
-  if (!db) return NextResponse.json({ users: [], scores: {} });
+  if (!db) return NextResponse.json({ users: [], scores: {}, playedMatchCount: 0, totalMatchCount: 0 });
 
   const [uSnap, sSnap, mSnap] = await Promise.all([
     db.collection("users").get(),
@@ -36,5 +53,7 @@ export async function GET() {
     if (playedStatuses.has((d.data() as { status: string }).status)) playedMatchCount++;
   }
 
-  return NextResponse.json({ users, scores, playedMatchCount, totalMatchCount });
+  const payload: LeaguePayload = { users, scores, playedMatchCount, totalMatchCount };
+  cache = { payload, expires: Date.now() + TTL_MS };
+  return NextResponse.json(payload);
 }
