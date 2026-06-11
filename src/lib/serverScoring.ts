@@ -17,17 +17,31 @@ function isPlayed(m: WcMatch): boolean {
   return m.goals.home !== null && m.goals.away !== null && ["FT", "AET", "PEN"].includes(m.status);
 }
 
-/** Build the actual-results snapshot used to score everyone. */
-async function loadActual(db: Firestore): Promise<ActualData> {
+/** Read the raw match + standings docs once, for reuse across snapshots. */
+async function loadRaw(
+  db: Firestore,
+): Promise<{ allMatches: WcMatch[]; standings: WcGroupStanding[] }> {
   const [matchSnap, standSnap] = await Promise.all([
     db.collection("wcMatches").get(),
     db.collection("wcStandings").get(),
   ]);
-  const allMatches = matchSnap.docs.map((d) => d.data() as WcMatch);
-  const standings = standSnap.docs.map((d) => d.data() as WcGroupStanding);
+  return {
+    allMatches: matchSnap.docs.map((d) => d.data() as WcMatch),
+    standings: standSnap.docs.map((d) => d.data() as WcGroupStanding),
+  };
+}
 
-  // Played matches → ActualMatch
-  const matches: ActualMatch[] = allMatches.filter(isPlayed).map((m) => ({
+/**
+ * Build the actual-results snapshot from a given set of PLAYED matches plus the
+ * group standings. Pure, so it can be called for the final results or for any
+ * prefix of completed games (used to build the per-game cumulative history).
+ *
+ * A group's finishing order / third-place set only counts once all of that
+ * group's six matches are inside `played` — and by then the standings order for
+ * that group is final, so reading it from `standings` is correct.
+ */
+function buildActual(played: WcMatch[], standings: WcGroupStanding[]): ActualData {
+  const matches: ActualMatch[] = played.map((m) => ({
     id: m.id,
     isGroupStage: isGroupStage(m.round),
     home: m.goals.home as number,
@@ -40,10 +54,10 @@ async function loadActual(db: Firestore): Promise<ActualData> {
   const teamGroup = new Map<number, string>();
   for (const g of standings) for (const r of g.rows) teamGroup.set(r.teamId, g.group);
 
-  // Group → played count of its group-stage matches (6 when complete)
+  // Group → count of its group-stage matches present in `played` (6 = complete)
   const playedByGroup = new Map<string, number>();
-  for (const m of allMatches) {
-    if (!isGroupStage(m.round) || !isPlayed(m)) continue;
+  for (const m of played) {
+    if (!isGroupStage(m.round)) continue;
     const grp = teamGroup.get(m.homeTeamId) ?? teamGroup.get(m.awayTeamId);
     if (grp) playedByGroup.set(grp, (playedByGroup.get(grp) ?? 0) + 1);
   }
@@ -124,19 +138,25 @@ export async function autoFillMissingPredictions(
 
 /**
  * Recompute every user's score from cached results + their predictions,
- * persisting `scores/{uid}` and appending a daily point to the history series.
+ * persisting `scores/{uid}`. The history is rebuilt from scratch each run as a
+ * per-game cumulative series (game 1 = first completed match, chronologically),
+ * using FINAL results only — so the charts step once per game, deterministically.
  */
 export async function recomputeAllScores(db: Firestore): Promise<number> {
-  const actual = await loadActual(db);
-  // Batch-read all existing scores once (for history carry-forward) instead of
-  // a separate read per user inside the loop.
-  const [usersSnap, scoresSnap] = await Promise.all([
-    db.collection("users").get(),
-    db.collection("scores").get(),
-  ]);
-  const prevByUid = new Map<string, ScoreDoc>();
-  scoresSnap.forEach((d) => prevByUid.set(d.id, d.data() as ScoreDoc));
-  const today = new Date().toISOString().slice(0, 10);
+  const { allMatches, standings } = await loadRaw(db);
+
+  // Completed games in chronological (kickoff) order = the chart's game axis.
+  const playedSorted = allMatches
+    .filter(isPlayed)
+    .sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+
+  const finalActual = buildActual(playedSorted, standings);
+  // One ActualData per prefix of completed games, reused across all users.
+  const prefixActuals: ActualData[] = playedSorted.map((_, i) =>
+    buildActual(playedSorted.slice(0, i + 1), standings),
+  );
+
+  const usersSnap = await db.collection("users").get();
 
   let count = 0;
   let errors = 0;
@@ -144,18 +164,15 @@ export async function recomputeAllScores(db: Firestore): Promise<number> {
     const uid = userDoc.id;
     try {
       const preds = await loadUserPredictions(db, uid);
-      const s = computeUserScore(actual, preds);
+      const s = computeUserScore(finalActual, preds);
+
+      const history = prefixActuals.map((a, i) => ({
+        game: i + 1,
+        total: computeUserScore(a, preds).total,
+        date: playedSorted[i].kickoff.slice(0, 10), // YYYY-MM-DD of that game
+      }));
 
       const ref = db.collection("scores").doc(uid);
-      const prev = prevByUid.get(uid);
-      const history = prev?.history ? [...prev.history] : [];
-      const lastIdx = history.length - 1;
-      if (lastIdx >= 0 && history[lastIdx].date === today) {
-        history[lastIdx] = { date: today, total: s.total };
-      } else {
-        history.push({ date: today, total: s.total });
-      }
-
       const scoreDoc: ScoreDoc = {
         uid,
         groupPts: s.groupPts,

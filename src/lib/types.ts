@@ -102,6 +102,9 @@ export interface ScoreDoc {
   outcomesTotal?: number;
   /** At least one of home/away score was exactly correct. */
   partialScoreCorrect?: number;
-  /** Time series for the cumulative chart. */
-  history: { date: string; total: number }[];
+  /** Cumulative total after each completed game (game 1 = first WC game played).
+   *  Built from FINAL results only; drives the by-game cumulative/rank charts.
+   *  `date` (YYYY-MM-DD of that game) is kept so date-based dashboard stats
+   *  (player of the week, biggest jump) still work. */
+  history: { game: number; total: number; date: string }[];
 }

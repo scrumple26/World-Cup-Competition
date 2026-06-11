@@ -44,12 +44,12 @@ export function StandingsTrendChart({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="label">
-            {view === "points" ? "Cumulative points over time" : "Rankings over time"}
+            {view === "points" ? "Cumulative points by game" : "Rankings by game"}
           </div>
           <p className="text-xs text-[var(--muted)]">
             {view === "points"
-              ? "Total points as results arrive — all players"
-              : "Lower = better · steps when a result reorders the table"}
+              ? "Total points after each completed game — all players"
+              : "Lower = better · position after each completed game"}
           </p>
         </div>
         <div className="flex gap-1 rounded-lg border border-[var(--border)] p-1">
@@ -77,7 +77,7 @@ export function StandingsTrendChart({
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={series.data} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
-            <XAxis dataKey="date" stroke={c.axis} fontSize={12} />
+            <XAxis dataKey="game" stroke={c.axis} fontSize={12} allowDecimals={false} tickFormatter={(v) => String(v)} />
             {view === "points" ? (
               <YAxis stroke={c.axis} fontSize={12} allowDecimals />
             ) : (
@@ -93,6 +93,7 @@ export function StandingsTrendChart({
             )}
             <Tooltip
               contentStyle={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, fontSize: 12 }}
+              labelFormatter={(l) => `Game ${l}`}
               formatter={view === "rankings" ? (val) => [`#${val}`, ""] : undefined}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />

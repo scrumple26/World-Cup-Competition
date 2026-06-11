@@ -38,10 +38,11 @@ export function CumulativeChart({ series }: { series: ChartSeries }) {
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={series.data} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
-        <XAxis dataKey="date" stroke={c.axis} fontSize={12} />
+        <XAxis dataKey="game" stroke={c.axis} fontSize={12} allowDecimals={false} tickFormatter={(v) => String(v)} />
         <YAxis stroke={c.axis} fontSize={12} allowDecimals />
         <Tooltip
           contentStyle={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, fontSize: 12 }}
+          labelFormatter={(l) => `Game ${l}`}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {series.keys.map((k, i) => (

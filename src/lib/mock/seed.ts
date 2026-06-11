@@ -55,16 +55,17 @@ function lcg(seed: number): () => number {
   };
 }
 
-const MATCHDAYS = ["Jun 11", "Jun 14", "Jun 17", "Jun 20", "Jun 24", "Jun 27"];
+const SEED_GAMES = 12; // synthetic completed games for the demo charts
 
 /** Synthetic but deterministic per-user scores + cumulative history. */
 export const SEED_SCORES: Record<string, ScoreDoc> = Object.fromEntries(
   SEED_USERS.map((u, i) => {
     const rng = lcg(i + 7);
     let running = 0;
-    const history = MATCHDAYS.map((d) => {
-      running += Math.round(rng() * 9 * 10) / 10; // up to ~9 pts per matchday
-      return { date: d, total: Math.round(running * 10) / 10 };
+    const history = Array.from({ length: SEED_GAMES }, (_, g) => {
+      running += Math.round(rng() * 3 * 10) / 10; // up to ~3 pts per game
+      const day = String(11 + g).padStart(2, "0");
+      return { game: g + 1, total: Math.round(running * 10) / 10, date: `2026-06-${day}` };
     });
     const groupPts = history[history.length - 1].total;
     return [

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
 import { buildGroupStandings, buildChartSeries, buildProjectionRows } from "@/lib/league";
@@ -84,26 +84,26 @@ export function GroupsClient() {
                 )}
               </div>
               <StandingsTable rows={rows} highlightUid={user?.uid} showQualify />
-              <div className="mt-4">
-                <div className="label">Cumulative points over time</div>
-                <CumulativeChart series={series} />
-              </div>
-              <div className="mt-5">
-                <div className="label mb-2">Projected final standings</div>
-                <ProjectionChart
-                  rows={projRows}
-                  playedMatchCount={data.playedMatchCount}
-                  totalMatchCount={data.totalMatchCount}
-                />
-              </div>
-              <div className="mt-5">
-                <div className="label mb-2">Win probability</div>
-                <WinProbabilityChart
-                  rows={rows}
-                  playedMatchCount={data.playedMatchCount}
-                  totalMatchCount={data.totalMatchCount}
-                  highlightUid={user?.uid}
-                />
+
+              <div className="mt-4 space-y-2">
+                <ChartAccordion title="Cumulative points by game" defaultOpen>
+                  <CumulativeChart series={series} />
+                </ChartAccordion>
+                <ChartAccordion title="Projected final standings">
+                  <ProjectionChart
+                    rows={projRows}
+                    playedMatchCount={data.playedMatchCount}
+                    totalMatchCount={data.totalMatchCount}
+                  />
+                </ChartAccordion>
+                <ChartAccordion title="Win probability">
+                  <WinProbabilityChart
+                    rows={rows}
+                    playedMatchCount={data.playedMatchCount}
+                    totalMatchCount={data.totalMatchCount}
+                    highlightUid={user?.uid}
+                  />
+                </ChartAccordion>
               </div>
             </section>
           );
@@ -114,5 +114,26 @@ export function GroupsClient() {
         ● marks the top 2 in each group, who advance to the knockout bracket.
       </p>
     </div>
+  );
+}
+
+/** Collapsible section for a chart — click the header to open/close. */
+function ChartAccordion({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className="group rounded-lg border border-[var(--border)]">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold">
+        <span>{title}</span>
+        <span className="text-[var(--muted)] transition-transform group-open:rotate-180">▾</span>
+      </summary>
+      <div className="px-3 pb-3 pt-1">{children}</div>
+    </details>
   );
 }

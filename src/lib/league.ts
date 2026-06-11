@@ -120,34 +120,31 @@ export interface ChartSeries {
 }
 
 /**
- * Build rank-over-time series. Lower rank = better (1 = first place).
- * Returns chart-ready data where each row is a date and each key is a teamName → rank.
+ * Build rank-by-game series. Lower rank = better (1 = first place). The X axis
+ * is the game number (starting at game 1); each row ranks players by their
+ * cumulative total after that game.
  */
 export function buildRankSeries(
   users: UserProfile[],
   scores: Record<string, ScoreDoc>,
 ): ChartSeries {
-  // Collect all unique dates across all histories
-  const seen = new Set<string>();
-  const dateOrder: string[] = [];
+  const games = new Set<number>();
   for (const u of users) {
-    for (const h of (scores[u.uid]?.history ?? [])) {
-      if (!seen.has(h.date)) { seen.add(h.date); dateOrder.push(h.date); }
-    }
+    for (const h of (scores[u.uid]?.history ?? [])) games.add(h.game);
   }
-  dateOrder.sort(); // chronological
+  const gameOrder = [...games].sort((a, b) => a - b);
 
   const lastTotals: Record<string, number> = {};
 
-  const data = dateOrder.map((date) => {
-    // Update running totals
+  const data = gameOrder.map((game) => {
+    // Update running totals as of this game
     for (const u of users) {
-      const hit = scores[u.uid]?.history.find((h) => h.date === date);
+      const hit = scores[u.uid]?.history.find((h) => h.game === game);
       if (hit) lastTotals[u.uid] = hit.total;
     }
-    // Rank at this date
+    // Rank at this game
     const sorted = [...users].sort((a, b) => (lastTotals[b.uid] ?? 0) - (lastTotals[a.uid] ?? 0));
-    const row: Record<string, string | number> = { date };
+    const row: Record<string, string | number> = { game };
     sorted.forEach((u, i) => { row[u.teamName] = i + 1; });
     return row;
   });
@@ -203,27 +200,22 @@ export function buildProjectionRows(
 }
 
 /**
- * Build cumulative-points-over-time chart rows from members' score histories.
- * Dates are unioned in first-seen order; missing points carry forward.
+ * Build cumulative-points-by-game chart rows from members' score histories.
+ * The X axis is the game number (1 = first completed WC game); each player's
+ * total carries forward across games where they have no new point.
  */
 export function buildChartSeries(
-  members: { teamName: string; history: { date: string; total: number }[] }[],
+  members: { teamName: string; history: { game: number; total: number }[] }[],
 ): ChartSeries {
-  const dateOrder: string[] = [];
-  const seen = new Set<string>();
-  for (const m of members) {
-    for (const h of m.history) {
-      if (!seen.has(h.date)) {
-        seen.add(h.date);
-        dateOrder.push(h.date);
-      }
-    }
-  }
+  const games = new Set<number>();
+  for (const m of members) for (const h of m.history) games.add(h.game);
+  const gameOrder = [...games].sort((a, b) => a - b);
+
   const last: Record<string, number> = {};
-  const data = dateOrder.map((date) => {
-    const row: Record<string, number | string> = { date };
+  const data = gameOrder.map((game) => {
+    const row: Record<string, number | string> = { game };
     for (const m of members) {
-      const hit = m.history.find((h) => h.date === date);
+      const hit = m.history.find((h) => h.game === game);
       if (hit) last[m.teamName] = hit.total;
       row[m.teamName] = last[m.teamName] ?? 0;
     }

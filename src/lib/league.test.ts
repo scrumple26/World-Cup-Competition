@@ -34,15 +34,15 @@ describe("buildLeaderboard", () => {
 });
 
 describe("buildChartSeries", () => {
-  it("unions dates and carries values forward", () => {
+  it("unions games and carries values forward", () => {
     const { data, keys } = buildChartSeries([
-      { teamName: "X", history: [{ date: "d1", total: 2 }, { date: "d2", total: 5 }] },
-      { teamName: "Y", history: [{ date: "d1", total: 3 }] }, // missing d2 -> carry 3
+      { teamName: "X", history: [{ game: 1, total: 2 }, { game: 2, total: 5 }] },
+      { teamName: "Y", history: [{ game: 1, total: 3 }] }, // missing game 2 -> carry 3
     ]);
     expect(keys).toEqual(["X", "Y"]);
     expect(data).toEqual([
-      { date: "d1", X: 2, Y: 3 },
-      { date: "d2", X: 5, Y: 3 },
+      { game: 1, X: 2, Y: 3 },
+      { game: 2, X: 5, Y: 3 },
     ]);
   });
 });
