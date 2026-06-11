@@ -19,6 +19,10 @@
     {
       "path": "/api/reminders/predictions?phase=1h",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/buzz",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

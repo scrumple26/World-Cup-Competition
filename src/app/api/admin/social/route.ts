@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
-import { generateTweets, type TweetContext } from "@/lib/social";
+import {
+  generateTweets, generatePreMatchTweets, generateHalftimeTweets,
+  type TweetContext, type PreMatchTweetContext, type HalftimeTweetContext, type PreMatchPick,
+} from "@/lib/social";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +45,42 @@ function sampleTweetContext(): TweetContext {
   };
 }
 
-/** POST /api/admin/social — admin-only sample fan-tweet generator (not persisted). */
+function samplePreMatchContext(): PreMatchTweetContext {
+  const groups = ["A", "B", "C", "D"];
+  const picks: PreMatchPick[] = pickN(TEAMS, 3).map((team, i) => ({
+    team, predHome: rint(0, 3), predAway: rint(0, 3), group: groups[i % groups.length],
+  }));
+  const groupmates: Record<string, string[]> = {};
+  for (const p of picks) groupmates[p.team] = TEAMS.filter((t) => t !== p.team).slice(0, 2);
+  return {
+    homeCountry: "USA", awayCountry: "Senegal", matchHashtag: "#USAvsSenegal",
+    minutesToKickoff: 30, picks, groupmates,
+  };
+}
+
+function sampleHalftimeContext(): HalftimeTweetContext {
+  const [a, b, c] = pickN(TEAMS, 3);
+  return {
+    homeCountry: "USA", awayCountry: "Senegal", matchHashtag: "#USAvsSenegal",
+    homeScore: rint(0, 2), awayScore: rint(0, 2),
+    onTrackPerfect: [a], onTrackOutcome: [b], wrongFooted: [c],
+  };
+}
+
+/** POST /api/admin/social — admin-only sample fan-tweet generator (not persisted).
+ *  Body { phase?: "result" | "prematch" | "halftime" } (default "result"). */
 export async function POST(req: NextRequest) {
   const admin = await requireAdmin(req);
   if (!admin) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  const base = await generateTweets(sampleTweetContext());
+
+  const body = (await req.json().catch(() => ({}))) as { phase?: "result" | "prematch" | "halftime" };
+  const phase = body.phase ?? "result";
+
+  const base =
+    phase === "prematch" ? await generatePreMatchTweets(samplePreMatchContext())
+    : phase === "halftime" ? await generateHalftimeTweets(sampleHalftimeContext())
+    : await generateTweets(sampleTweetContext());
+
   const now = new Date().toISOString();
   const tweets = base.map((t, i) => ({ id: `sample_${i}`, fixtureId: 0, createdAt: now, ...t }));
   return NextResponse.json({ ok: true, tweets, hasKey: !!process.env.GEMINI_API_KEY });

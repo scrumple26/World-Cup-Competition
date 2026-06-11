@@ -168,12 +168,14 @@ export async function generateWeeklyTimesTest(
   return { ok: res.ok, times: data.times, hasKey: data.hasKey, error: data.error };
 }
 
-export async function generateTweetTest(): Promise<{ ok: boolean; tweets?: FauxTweet[]; hasKey?: boolean; error?: string }> {
+export async function generateTweetTest(
+  phase: "result" | "prematch" | "halftime" = "result",
+): Promise<{ ok: boolean; tweets?: FauxTweet[]; hasKey?: boolean; error?: string }> {
   const token = await adminToken();
   const res = await fetch("/api/admin/social", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: "{}",
+    body: JSON.stringify({ phase }),
   });
   const data = (await res.json().catch(() => ({}))) as { tweets?: FauxTweet[]; hasKey?: boolean; error?: string };
   return { ok: res.ok, tweets: data.tweets, hasKey: data.hasKey, error: data.error };

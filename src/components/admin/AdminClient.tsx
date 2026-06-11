@@ -127,12 +127,12 @@ export function AdminClient() {
     }
   }
 
-  async function runTweetTest() {
+  async function runTweetTest(phase: "result" | "prematch" | "halftime" = "result") {
     setTweetBusy(true);
     setTweetNote(null);
     setTweets(null);
     try {
-      const r = await generateTweetTest();
+      const r = await generateTweetTest(phase);
       if (!r.ok) { setTweetNote(`Failed: ${r.error ?? "unknown error"}`); return; }
       setTweets(r.tweets ?? []);
       setTweetNote(r.hasKey ? "Generated with Gemini (sample, not posted)." : "No GEMINI_API_KEY set — showing templated fallback.");
@@ -315,11 +315,21 @@ export function AdminClient() {
       <section className="card p-4">
         <h2 className="mb-1 font-semibold">Match Buzz (test)</h2>
         <p className="mb-3 text-sm text-[var(--muted)]">
-          Preview the AI fan tweets generated on goals/results (sample USA-vs-Senegal data, not posted).
+          Preview the AI fan tweets (sample USA-vs-Senegal data, not posted). Pre-match fires ~30 min before
+          kickoff (hyping/trashing predictions), half-time reacts to the live score through the GFC lens, and
+          full-time reacts to goals/results — all with fans free to banter rival teams.
         </p>
-        <button className="btn-primary" disabled={tweetBusy} onClick={runTweetTest}>
-          {tweetBusy ? "Generating…" : "Generate sample tweets"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button className="btn-primary" disabled={tweetBusy} onClick={() => runTweetTest("prematch")}>
+            {tweetBusy ? "Generating…" : "Pre-match sample"}
+          </button>
+          <button className="btn-primary" disabled={tweetBusy} onClick={() => runTweetTest("halftime")}>
+            {tweetBusy ? "Generating…" : "Half-time sample"}
+          </button>
+          <button className="btn-primary" disabled={tweetBusy} onClick={() => runTweetTest("result")}>
+            {tweetBusy ? "Generating…" : "Full-time sample"}
+          </button>
+        </div>
         {tweetNote && <p className="mt-2 text-xs text-[var(--muted)]">{tweetNote}</p>}
         {tweets && tweets.length > 0 && (
           <div className="mt-3">
