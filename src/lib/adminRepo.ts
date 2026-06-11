@@ -179,6 +179,11 @@ export async function generateTweetTest(): Promise<{ ok: boolean; tweets?: FauxT
   return { ok: res.ok, tweets: data.tweets, hasKey: data.hasKey, error: data.error };
 }
 
+export async function unlockUser(uid: string): Promise<AdminResult> {
+  if (USE_MOCK) return { ok: true, mock: true };
+  return post("/api/admin/unlock", { uid });
+}
+
 export async function removeUser(uid: string): Promise<AdminResult> {
   if (USE_MOCK) return { ok: true, mock: true };
   const token = await adminToken();

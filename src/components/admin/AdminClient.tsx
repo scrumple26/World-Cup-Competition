@@ -7,7 +7,7 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, overrideResult, removeUser, setUserGroup, syncNow, uploadTeamLogo } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, overrideResult, removeUser, setUserGroup, syncNow, unlockUser, uploadTeamLogo } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PunditDesk } from "@/components/PunditDesk";
@@ -24,6 +24,8 @@ export function AdminClient() {
   const [weeklyMsg, setWeeklyMsg] = useState("");
   const [msgSaving, setMsgSaving] = useState(false);
   const [predCounts, setPredCounts] = useState<Record<string, number>>({});
+  const [lockStatus, setLockStatus] = useState<Record<string, boolean>>({});
+  const [unlockingUid, setUnlockingUid] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [postText, setPostText] = useState("");
   const [postImage, setPostImage] = useState<File | null>(null);
@@ -61,17 +63,20 @@ export function AdminClient() {
   };
   useEffect(() => { loadPosts(); }, []);
 
-  // Load prediction counts for each player
+  // Load prediction counts + lock status for each player
   useEffect(() => {
     if (!league) return;
     Promise.all(
       league.users.map(u =>
         fetch(`/api/predictions?uid=${u.uid}`)
           .then(r => r.json())
-          .then(d => [u.uid, Object.keys(d.matches ?? {}).length] as [string, number])
-          .catch(() => [u.uid, 0] as [string, number])
+          .then(d => [u.uid, Object.keys(d.matches ?? {}).length, !!d.userLocked] as [string, number, boolean])
+          .catch(() => [u.uid, 0, false] as [string, number, boolean])
       )
-    ).then(entries => setPredCounts(Object.fromEntries(entries)));
+    ).then(entries => {
+      setPredCounts(Object.fromEntries(entries.map(([uid, count]) => [uid, count])));
+      setLockStatus(Object.fromEntries(entries.map(([uid, , locked]) => [uid, locked])));
+    });
   }, [league]);
 
   if (!user?.isAdmin) {
@@ -148,6 +153,22 @@ export function AdminClient() {
       }
     } finally {
       setLogoBusyUid(null);
+    }
+  }
+
+  async function handleUnlock(uid: string, teamName: string) {
+    if (!window.confirm(`Unlock ${teamName}'s predictions so they can edit and re-submit? Their current picks are kept.`)) return;
+    setUnlockingUid(uid);
+    try {
+      const r = await unlockUser(uid);
+      if (r.ok) {
+        setLockStatus(prev => ({ ...prev, [uid]: false }));
+        flash(`✓ Unlocked ${teamName} — they can edit and lock in again`);
+      } else {
+        flash(`Failed: ${r.error ?? "unknown error"}`);
+      }
+    } finally {
+      setUnlockingUid(null);
     }
   }
 
@@ -444,7 +465,11 @@ export function AdminClient() {
       {/* Prediction completion status */}
       <section className="card p-4">
         <h2 className="mb-3 font-semibold">Prediction status</h2>
-        <p className="mb-3 text-xs text-[var(--muted)]">Number of match predictions each player has submitted.</p>
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Match predictions each player has submitted, and whether they&apos;ve locked in. Unlock a
+          player to let them edit and re-submit — their current picks are kept. (Only works before the
+          first match kicks off; after that the deadline locks everyone.)
+        </p>
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
           <table className="w-full text-sm">
             <thead className="bg-[var(--bg-elev)] text-xs uppercase text-[var(--muted)]">
@@ -452,6 +477,7 @@ export function AdminClient() {
                 <th className="px-3 py-2 text-left">Player</th>
                 <th className="px-3 py-2 text-left">Group</th>
                 <th className="px-3 py-2 text-right">Predictions</th>
+                <th className="px-3 py-2 text-center">Status</th>
                 <th className="px-3 py-2 text-right">Points</th>
               </tr>
             </thead>
@@ -463,6 +489,7 @@ export function AdminClient() {
                   const count = predCounts[u.uid];
                   const pts = league?.scores[u.uid]?.total ?? 0;
                   const hasAny = count > 0;
+                  const locked = lockStatus[u.uid];
                   return (
                     <tr key={u.uid} className="border-t border-[var(--border)]">
                       <td className="px-3 py-2 font-medium">{u.teamName}</td>
@@ -471,6 +498,20 @@ export function AdminClient() {
                         <span className={hasAny ? "text-green-400 font-semibold" : "text-[var(--muted)]"}>
                           {count === undefined ? "…" : count === 0 ? "None" : `${count} picks`}
                         </span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {locked ? (
+                          <button
+                            onClick={() => handleUnlock(u.uid, u.teamName)}
+                            disabled={unlockingUid === u.uid}
+                            className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                            title="Unlock so this player can edit and re-submit"
+                          >
+                            {unlockingUid === u.uid ? "Unlocking…" : "🔒 Unlock"}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-[var(--muted)]">Open</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right font-semibold">{pts}</td>
                     </tr>
