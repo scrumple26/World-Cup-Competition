@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
 import { getLiveFixtures, getMatchEvents, getMatchStatistics } from "@/lib/apiFootball";
 import { generatePunditCommentary, type CommentaryContext, type StatLeaderLine } from "@/lib/commentary";
+import { stakesForRound } from "@/lib/wc";
 import type { MatchScorer } from "@/lib/feedTypes";
 
 export const dynamic = "force-dynamic";
@@ -55,9 +56,14 @@ function sampleContext(): CommentaryContext {
   const [gained, gainedOut] = pickN(rest, 2);
   const perfectPickers = pickN(rest.filter((t) => t !== gained && t !== gainedOut), rint(1, 2));
 
+  // Randomize stakes each preview so admins can see how the desk's intensity shifts.
+  const sampleRound = pickN(["Group Stage - 1", "Group Stage - 3", "Round of 16"], 1)[0];
+
   return {
     homeTeam: "USA",
     awayTeam: "Senegal",
+    round: sampleRound,
+    stakes: stakesForRound(sampleRound),
     homeScore,
     awayScore,
     scorers: [
@@ -122,6 +128,8 @@ async function fixtureContext(fixtureId: number): Promise<CommentaryContext | nu
     scorers,
     statLeaders,
     perfectPickers: [],
+    round: fx.league.round,
+    stakes: stakesForRound(fx.league.round),
   };
 }
 

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PunditLine, PunditSpeaker, MatchScorer, FeedLateDrama } from "./feedTypes";
+import type { MatchStakes } from "./wc";
 
 /**
  * AI pundit commentary via Google Gemini.
@@ -35,6 +36,10 @@ export interface CommentaryContext {
   perfectPickers: string[];
   /** Names of players whose perfect pick swung in the final minutes. */
   lateSwingNote?: string;
+  /** The match's round (e.g. "Round of 16", "Group Stage - 3"), for context. */
+  round?: string;
+  /** How much was riding on the game — drives the desk's intensity. */
+  stakes?: MatchStakes;
 }
 
 export const PUNDIT_PROFILES = `You are scripting a lively desk segment with three retired USMNT legends turned pundits:
@@ -75,6 +80,18 @@ function buildPrompt(ctx: CommentaryContext): string {
   }
   if (ctx.perfectPickers.length) facts.push(`Players who nailed the exact score: ${ctx.perfectPickers.join(", ")}.`);
 
+  // Stakes framing — drives how hard the desk leans into the drama.
+  let intensity: string;
+  if (ctx.stakes === "knockout") {
+    facts.push(`This was a ${ctx.round ?? "knockout"} match — win or go home; a loss ends a team's tournament.`);
+    intensity = "STAKES ARE HUGE — this is a KNOCKOUT tie, win-or-go-home. Crank the intensity up: every moment feels season-defining, the desk is on the edge of their seats, voices raised, the emotion operatic. The prediction-league points here matter more than ever.";
+  } else if (ctx.stakes === "qualifier") {
+    facts.push(`This was a final group-stage game — qualification was on the line; the result sends teams through or knocks them out.`);
+    intensity = "STAKES ARE HIGH — it's the FINAL group game with qualification on the line. Play up the do-or-die tension: who's through, who's crashing out, and what it swings in the prediction race.";
+  } else {
+    intensity = "It's a group-stage game — keep it lively and fun, but don't over-inflate the do-or-die theatrics.";
+  }
+
   const OPENERS = [
     "the late drama and who it made or broke",
     "why the winning side deserved it (or got away with one)",
@@ -84,8 +101,26 @@ function buildPrompt(ctx: CommentaryContext): string {
     "an attacking moment that swung it",
     "a hot take one of them can't wait to argue about",
   ];
-  const opener = OPENERS[Math.floor(Math.random() * OPENERS.length)];
-  const firstSpeaker = SPEAKERS[Math.floor(Math.random() * SPEAKERS.length)];
+  const MOODS = [
+    "raucous and loud, half-talking over each other",
+    "sharp and forensic, really digging into WHY it happened",
+    "salty and argumentative — they can't agree on anything today",
+    "warm and nostalgic, the old war stories flowing freely",
+    "giddy and buzzing off the sheer drama of it",
+    "dry and deadpan, needling each other between real points",
+  ];
+  const STRUCTURES = [
+    "Open mid-argument, as if we've cut in on a disagreement already in full swing.",
+    "Open with a blunt one-line hot take, then have the others pile on or push back.",
+    "Open with one pundit putting a pointed question straight to another.",
+    "Open with a vivid scene-setter about the single moment that decided it.",
+    "Open with someone flat-out refusing to believe the result.",
+  ];
+  const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+  const opener = pick(OPENERS);
+  const mood = pick(MOODS);
+  const structure = pick(STRUCTURES);
+  const firstSpeaker = pick(SPEAKERS);
 
   return `${PUNDIT_PROFILES}
 
@@ -94,10 +129,12 @@ You're scripting the post-match desk for the Global Football Cup (a 16-player Wo
 FACTS (every factual claim — score, players, stats, who made/lost a perfect pick — must come from here; you may dramatize, joke, and give opinions, but never invent facts):
 ${facts.map((f) => "- " + f).join("\n")}
 
+TODAY'S TONE: the desk is ${mood}. ${intensity}
+
 RULES:
-- EXACTLY 6 lines. ${firstSpeaker} OPENS with a reaction purely about the REAL match — the goal/result and why it happened (lead on ${opener}); no prediction-game talk in line 1.
+- EXACTLY 6 lines. ${firstSpeaker} OPENS. ${structure} The opening must be about the REAL match — the goal/result and why it happened (lead on ${opener}); no prediction-game talk in line 1.
 - Lines 2-6 stay anchored to the real match but increasingly weave in the Global Football Cup angle (who predicted it, whose perfect game was made or broken, standings movement) — naturally and conversationally, not forced or every line.
-- Fresh angle and phrasing each time; don't fall back on a stock opening.
+- Fresh angle, structure, and phrasing every single time — never settle into the same rhythm or reuse a stock opening.
 - Make it ALIVE: react with excitement, disbelief or sympathy; address each other by name; ask each other real questions and actually answer them; interrupt, agree, and disagree.
 - Keep the voices DISTINCT: Dempsey blunt and swaggering about the attack; Howard fired up about goalkeeping/defending and quick to chirp the strikers; Donovan the smooth tactician who reins them in.
 - Banter, ribbing, and the odd "back in my World Cup days…" memory are the SEASONING (about 1 in 4 lines) — the rest is real insight into why the winner won (lean on the team stats) and the prediction-league drama.

@@ -57,6 +57,21 @@ export function isGroupRound(round: string): boolean {
   return round.startsWith("Group Stage");
 }
 
+/** How much is riding on a match — drives pundit tone/intensity. */
+export type MatchStakes = "normal" | "qualifier" | "knockout";
+
+/**
+ * Stakes for a match from its round:
+ *  - knockout  → any non-group round (win or go home)
+ *  - qualifier → the final group matchday (qualification on the line)
+ *  - normal    → earlier group games
+ */
+export function stakesForRound(round: string): MatchStakes {
+  if (!isGroupRound(round)) return "knockout";
+  if (round === "Group Stage - 3") return "qualifier";
+  return "normal";
+}
+
 const LIVE_STATUS = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
 const DONE_STATUS = new Set(["FT", "AET", "PEN"]);
 

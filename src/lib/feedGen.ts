@@ -5,6 +5,7 @@ import type { WcMatch, MatchPrediction, UserProfile, ScoreDoc } from "./types";
 import { scoreMatch, outcomeOf } from "./scoring";
 import { getMatchEvents, getMatchStatistics } from "./apiFootball";
 import { generatePunditCommentary, type StatLeaderLine } from "./commentary";
+import { stakesForRound } from "./wc";
 import { generateTweets, type TweetContext } from "./social";
 import type { FeedEntry, PerUserMatchResult, FeedLateDrama, MatchScorer } from "./feedTypes";
 
@@ -257,6 +258,8 @@ export async function generateFeedEntries(
       statLeaders,
       lateDrama,
       perfectPickers: perUser.filter((u) => u.perfect).map((u) => u.teamName),
+      round: match.round,
+      stakes: stakesForRound(match.round),
     });
 
     const entry: FeedEntry = {
