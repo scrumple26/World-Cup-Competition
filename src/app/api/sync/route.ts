@@ -51,11 +51,9 @@ async function handle(req: NextRequest) {
     //    avoiding 104 sequential reads inside the batch loop.
     const existingSnap = await db.collection("wcMatches").get();
     const manualOverrides = new Set<string>();
-    const prevStatuses = new Map<string, string>();
     for (const d of existingSnap.docs) {
-      const data = d.data() as { manualOverride?: boolean; status?: string };
+      const data = d.data() as { manualOverride?: boolean };
       if (data.manualOverride) manualOverrides.add(d.id);
-      if (data.status) prevStatuses.set(d.id, data.status);
     }
 
     // 3. Write fixtures → wcMatches (skip manual overrides)
@@ -107,16 +105,31 @@ async function handle(req: NextRequest) {
     //    wrapped). Otherwise a feed failure would leave every score at 0.
     const scored = await recomputeAllScores(db);
 
-    // 7. Generate feed entries for matches that just became FT/AET/PEN this sync.
+    // 7. Generate feed entries (recap + pundit + result tweets). Target every
+    //    completed match that is MISSING a complete feed entry — not just ones
+    //    that flipped to FT this run — so a single sync backfills anything an
+    //    earlier run missed (e.g. a transient Firestore-quota failure). The set
+    //    write in generateFeedEntries is idempotent, so re-running is safe.
     //    Non-critical: never let this block or fail the sync.
     const playedStatuses = new Set(["FT", "AET", "PEN"]);
-    const newlyCompleted = wcMatches.filter(
-      (m) => playedStatuses.has(m.status) && !playedStatuses.has(prevStatuses.get(String(m.id)) ?? ""),
-    );
     let feedCount = 0;
     try {
-      const usersSnap = await db.collection("users").get();
-      feedCount = await generateFeedEntries(db, newlyCompleted, usersSnap);
+      const [usersSnap, feedSnap] = await Promise.all([
+        db.collection("users").get(),
+        db.collection("feedEntries").get(),
+      ]);
+      const completeFeedIds = new Set(
+        feedSnap.docs
+          .filter((d) => {
+            const e = d.data() as { commentary?: unknown[] };
+            return Array.isArray(e.commentary) && e.commentary.length > 0;
+          })
+          .map((d) => d.id),
+      );
+      const needsFeed = wcMatches.filter(
+        (m) => playedStatuses.has(m.status) && !completeFeedIds.has(String(m.id)),
+      );
+      feedCount = await generateFeedEntries(db, needsFeed, usersSnap);
     } catch (e) {
       console.error("[sync] feed generation failed (scores still updated):", e);
     }

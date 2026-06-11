@@ -57,10 +57,19 @@ export async function POST(req: NextRequest) {
       db.collection("feedEntries").get(),
     ]);
     const wcMatches = wcSnap.docs.map((d) => d.data() as WcMatch);
-    const existingFeedIds = new Set(feedSnap.docs.map((d) => d.id));
+    // A feed entry only "counts" as done once it has commentary — so a match
+    // whose earlier generation failed (empty/partial entry) is regenerated.
+    const completeFeedIds = new Set(
+      feedSnap.docs
+        .filter((d) => {
+          const e = d.data() as { commentary?: unknown[] };
+          return Array.isArray(e.commentary) && e.commentary.length > 0;
+        })
+        .map((d) => d.id),
+    );
     const playedStatuses = new Set(["FT", "AET", "PEN"]);
     const needsFeed = wcMatches.filter(
-      (m) => playedStatuses.has(m.status) && !existingFeedIds.has(String(m.id)),
+      (m) => playedStatuses.has(m.status) && !completeFeedIds.has(String(m.id)),
     );
 
     // Nothing newly completed → no scores can have changed. Skip the heavy

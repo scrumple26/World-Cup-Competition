@@ -223,21 +223,36 @@ export async function generateFeedEntries(
   } catch { /* scores may not exist yet */ }
 
   // Who's "managing" each team and which managers are struggling (for fan banter).
-  const managerCtx = await gatherManagerContext(db, [...userProfiles.values()]);
+  // Non-critical: if this read fails (e.g. Firestore quota), still build feeds.
+  let managerCtx: ManagerContext;
+  try {
+    managerCtx = await gatherManagerContext(db, [...userProfiles.values()]);
+  } catch {
+    managerCtx = { managers: {}, strugglers: [] };
+  }
 
   let count = 0;
   for (const match of newlyCompleted) {
     if (match.goals.home === null || match.goals.away === null) continue;
 
+    // Each match is isolated: one match (or one transient read failure) must
+    // never abort the rest, so the feed/pundit/tweets get generated for as many
+    // completed games as possible — and a later run backfills any that failed.
+    try {
     const perUser: PerUserMatchResult[] = [];
 
     for (const [uid, profile] of userProfiles) {
-      const predSnap = await db
-        .collection("predictions")
-        .doc(uid)
-        .collection("matches")
-        .doc(String(match.id))
-        .get();
+      let predSnap;
+      try {
+        predSnap = await db
+          .collection("predictions")
+          .doc(uid)
+          .collection("matches")
+          .doc(String(match.id))
+          .get();
+      } catch {
+        continue; // skip this user on a read error; don't lose the whole match
+      }
       if (!predSnap.exists) continue;
 
       const p = predSnap.data() as MatchPrediction;
@@ -313,6 +328,9 @@ export async function generateFeedEntries(
         return db.collection("tweets").doc(id).set({ id, fixtureId: match.id, createdAt: now, ...t });
       }));
     } catch { /* tweets are best-effort */ }
+    } catch (e) {
+      console.error(`[generateFeedEntries] failed for fixture ${match.id}:`, e);
+    }
   }
 
   return count;
