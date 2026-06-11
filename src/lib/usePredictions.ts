@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   GroupPrediction,
   MatchPrediction,
@@ -69,7 +69,6 @@ export function usePredictions(
   groups: GroupBundle[],
   deadline?: string | null,
   syncDrafts = true,
-  lateJoiner = false,
 ) {
   const [matches,    setMatches]    = useState<Record<number, MatchPrediction>>({});
   const [groupOrders,setGroupOrders] = useState<Record<string, number[]>>({});
@@ -96,39 +95,8 @@ export function usePredictions(
     return () => clearTimeout(t);
   }, [deadline, isPastDeadline]);
 
-  // isLocked = manually locked in OR deadline has passed.
-  // Late joiners are NOT globally locked — they edit upcoming games per-match.
-  const isLocked = isUserLocked || (isPastDeadline && !lateJoiner);
-  // Helper: a match is closed once its kickoff has passed (used for late joiners).
-  const kickoffByFixture = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const g of groups) for (const m of g.matches) map.set(m.id, new Date(m.kickoff).getTime());
-    return map;
-  }, [groups]);
-  const matchStarted = useCallback(
-    (fixtureId: number) => {
-      const k = kickoffByFixture.get(fixtureId);
-      return k != null && Date.now() >= k;
-    },
-    [kickoffByFixture],
-  );
-
-  // Late joiners commit each change straight to Firestore (no one-time lock-in).
-  const commitLate = useCallback(async (type: "match" | "group" | "third", payload: unknown) => {
-    try {
-      const { getClientAuth } = await import("./firebase/client");
-      const auth = getClientAuth();
-      if (!auth) return;
-      try { await auth.authStateReady(); } catch { /* */ }
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
-      await fetch("/api/predictions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type, payload }),
-      });
-    } catch { /* non-fatal */ }
-  }, []);
+  // isLocked = manually locked in OR deadline has passed
+  const isLocked = isUserLocked || isPastDeadline;
 
   // saveStates kept for API compatibility with MatchPredictionCard
   const saveStates: Record<number, SaveState> = useMemo(() => ({}), []);
@@ -241,9 +209,7 @@ export function usePredictions(
 
   const setMatch = useCallback(
     (fixtureId: number, home: number | null, away: number | null, predictedWinner?: Outcome) => {
-      if (!uid || isUserLocked || (isPastDeadline && !lateJoiner)) return;
-      // Late joiners can only enter games that haven't kicked off yet.
-      if (lateJoiner && matchStarted(fixtureId)) return;
+      if (!uid || isUserLocked || isPastDeadline) return;
       const pred: MatchPrediction = {
         fixtureId,
         home: home ?? 0,
@@ -257,27 +223,25 @@ export function usePredictions(
         savePending(uid, { ...pending, matches: next });
         return next;
       });
-      if (lateJoiner) commitLate("match", pred);
     },
-    [uid, isUserLocked, isPastDeadline, lateJoiner, matchStarted, commitLate],
+    [uid, isUserLocked, isPastDeadline],
   );
 
   const setOrder = useCallback(
     (group: string, order: number[], overridden = false) => {
-      if (!uid || isUserLocked || (isPastDeadline && !lateJoiner)) return;
+      if (!uid || isUserLocked || isPastDeadline) return;
       setGroupOrders(prev => ({ ...prev, [group]: order }));
       setGroupOverriddenState(prev => ({ ...prev, [group]: overridden }));
       const pending = loadPending(uid);
       const grps = { ...pending.groups, [group]: { group, order, overridden } };
       savePending(uid, { ...pending, groups: grps });
-      if (lateJoiner) commitLate("group", { group, order });
     },
-    [uid, isUserLocked, isPastDeadline, lateJoiner, commitLate],
+    [uid, isUserLocked, isPastDeadline],
   );
 
   const toggleThird = useCallback(
     (teamId: number, max: number) => {
-      if (!uid || isUserLocked || (isPastDeadline && !lateJoiner)) return;
+      if (!uid || isUserLocked || isPastDeadline) return;
       setThirdPlaceOverridden(true);
       setThirdPlaceState(prev => {
         let next: number[];
@@ -286,41 +250,38 @@ export function usePredictions(
         else return prev;
         const pending = loadPending(uid);
         savePending(uid, { ...pending, thirdPlace: next, thirdPlaceOverridden: true });
-        if (lateJoiner) commitLate("third", { advancing: next });
         return next;
       });
     },
-    [uid, isUserLocked, isPastDeadline, lateJoiner, commitLate],
+    [uid, isUserLocked, isPastDeadline],
   );
 
   const setThirdPlaceAuto = useCallback(
     (ids: number[]) => {
-      if (!uid || thirdPlaceOverridden || isUserLocked || (isPastDeadline && !lateJoiner)) return;
+      if (!uid || thirdPlaceOverridden || isUserLocked || isPastDeadline) return;
       setThirdPlaceState(ids);
       const pending = loadPending(uid);
       savePending(uid, { ...pending, thirdPlace: ids, thirdPlaceOverridden: false });
-      if (lateJoiner) commitLate("third", { advancing: ids });
     },
-    [uid, thirdPlaceOverridden, isUserLocked, isPastDeadline, lateJoiner, commitLate],
+    [uid, thirdPlaceOverridden, isUserLocked, isPastDeadline],
   );
 
   const overrideThirdPlace = useCallback(() => {
-    if (!uid || isUserLocked || (isPastDeadline && !lateJoiner)) return;
+    if (!uid || isUserLocked || isPastDeadline) return;
     setThirdPlaceOverridden(true);
     const pending = loadPending(uid);
     savePending(uid, { ...pending, thirdPlaceOverridden: true });
-  }, [uid, isUserLocked, isPastDeadline, lateJoiner]);
+  }, [uid, isUserLocked, isPastDeadline]);
 
   const resetThirdPlaceOverride = useCallback(
     (autoIds: number[]) => {
-      if (!uid || isUserLocked || (isPastDeadline && !lateJoiner)) return;
+      if (!uid || isUserLocked || isPastDeadline) return;
       setThirdPlaceOverridden(false);
       setThirdPlaceState(autoIds);
       const pending = loadPending(uid);
       savePending(uid, { ...pending, thirdPlace: autoIds, thirdPlaceOverridden: false });
-      if (lateJoiner) commitLate("third", { advancing: autoIds });
     },
-    [uid, isUserLocked, isPastDeadline, lateJoiner, commitLate],
+    [uid, isUserLocked, isPastDeadline],
   );
 
   // ---- lockIn — the only write to Firestore ----
@@ -378,18 +339,10 @@ export function usePredictions(
     }
   }, [uid, matches, locking, isUserLocked]);
 
-  // Keep a stable ref so the auto-lock effect always calls the latest lockIn
-  const lockInRef = useRef(lockIn);
-  useEffect(() => { lockInRef.current = lockIn; });
-
-  // Auto-submit pending picks when the deadline passes (fires once)
-  const autoLockFired = useRef(false);
-  useEffect(() => {
-    if (!isPastDeadline || isUserLocked || !loaded || !uid || autoLockFired.current) return;
-    autoLockFired.current = true;
-    void lockInRef.current();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPastDeadline, isUserLocked, loaded, uid]);
+  // No auto-lock at the deadline: locking in is an explicit, all-at-once action.
+  // The deadline is a hard lockout (enforced server-side too) — anyone who has
+  // not locked in by then scores 0. Past the deadline the UI is read-only via
+  // isLocked, so picks simply can no longer be submitted.
 
   // ---- cross-device draft sync: debounce-save the full draft to the server ----
   useEffect(() => {

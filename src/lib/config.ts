@@ -15,6 +15,25 @@ export const FIREBASE_WEB_CONFIGURED =
 export const USE_MOCK =
   process.env.NEXT_PUBLIC_USE_MOCK === "1" || !FIREBASE_WEB_CONFIGURED;
 
+/**
+ * The single pick deadline — both "soft" and "hard" at the same instant.
+ *
+ * Before it: you may lock in any time, but any game that already kicked off
+ * before your lock-in scores 0 (enforced in scoring via your lock-in time vs.
+ * each match's kickoff). After it: total lockout — no new accounts, no lock-ins,
+ * no pick edits (enforced server-side in the lock-in / predictions / profile
+ * routes). Change this one value to move the deadline.
+ *
+ * Sunday June 14, 2026, 11:59 PM Central (CDT, UTC-5).
+ */
+export const PICK_DEADLINE_ISO = "2026-06-14T23:59:00-05:00";
+export const PICK_DEADLINE_MS = new Date(PICK_DEADLINE_ISO).getTime();
+
+/** True once the hard deadline has passed (total lockout). */
+export function isPastPickDeadline(now: number = Date.now()): boolean {
+  return now > PICK_DEADLINE_MS;
+}
+
 export const ADMIN_EMAIL = (
   process.env.NEXT_PUBLIC_ADMIN_EMAIL ??
   process.env.ADMIN_EMAIL ??

@@ -32,6 +32,7 @@ async function loadActual(db: Firestore): Promise<ActualData> {
     isGroupStage: isGroupStage(m.round),
     home: m.goals.home as number,
     away: m.goals.away as number,
+    kickoff: new Date(m.kickoff).getTime(),
     decidedWinner: m.decidedWinner as Outcome | undefined,
   }));
 
@@ -81,10 +82,11 @@ async function loadUserPredictions(
   db: Firestore,
   uid: string,
 ): Promise<UserPredictions> {
-  const [mSnap, gSnap, tSnap] = await Promise.all([
+  const [mSnap, gSnap, tSnap, lockSnap] = await Promise.all([
     db.collection("predictions").doc(uid).collection("matches").get(),
     db.collection("predictions").doc(uid).collection("groups").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("thirdPlace").get(),
+    db.collection("predictions").doc(uid).collection("meta").doc("userLock").get(),
   ]);
   const matches: Record<number, MatchPrediction> = {};
   mSnap.forEach((d) => {
@@ -99,7 +101,12 @@ async function loadUserPredictions(
   const thirdAdvancing = tSnap.exists
     ? ((tSnap.data() as { advancing: number[] }).advancing ?? [])
     : [];
-  return { matches, groupOrders, thirdAdvancing };
+  // Lock-in time gates scoring: games that started before this score 0. No
+  // lock doc → never locked in → no games count.
+  const lockedAt = lockSnap.exists
+    ? ((lockSnap.data() as { lockedAt?: number }).lockedAt ?? null)
+    : null;
+  return { matches, groupOrders, thirdAdvancing, lockedAt };
 }
 
 /**

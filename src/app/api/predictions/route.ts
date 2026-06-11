@@ -1,6 +1,7 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { ADMIN_EMAIL, isPastPickDeadline } from "@/lib/config";
 import type { GroupPrediction, MatchPrediction, ThirdPlacePrediction } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -78,11 +79,21 @@ export async function POST(req: NextRequest) {
   if (!token) return NextResponse.json({ error: "Missing token" }, { status: 401 });
 
   let uid: string;
+  let email: string;
   try {
     const decoded = await auth.verifyIdToken(token);
     uid = decoded.uid;
+    email = (decoded.email ?? "").toLowerCase();
   } catch {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+  }
+
+  // Hard lockout: no pick/draft writes after the deadline (admin may still act).
+  if (isPastPickDeadline() && email !== ADMIN_EMAIL) {
+    return NextResponse.json(
+      { error: "The pick deadline has passed — predictions are locked." },
+      { status: 403 },
+    );
   }
 
   const body = (await req.json().catch(() => ({}))) as {

@@ -9,6 +9,7 @@ import { ThirdPlaceSelector } from "./ThirdPlaceSelector";
 import { FlashcardMode } from "./FlashcardMode";
 import { KnockoutPredictions } from "./KnockoutPredictions";
 import type { MatchPrediction, WcMatch } from "@/lib/types";
+import { PICK_DEADLINE_ISO } from "@/lib/config";
 
 const CT = "America/Chicago";
 
@@ -111,20 +112,9 @@ export function PredictionsClient({
   const groups = data?.groups ?? [];
   const targetUid = actAs?.uid ?? user?.uid;
 
-  // Deadline = kickoff of the first group stage match
-  const deadline = useMemo(() => {
-    if (!data) return null;
-    const kickoffs = data.fixtures
-      .filter(m => m.round.startsWith("Group Stage"))
-      .map(m => m.kickoff)
-      .sort();
-    return kickoffs[0] ?? null;
-  }, [data]);
-
-  // A late joiner signed up after the first kickoff. They edit upcoming games
-  // per-match (each commits immediately); missed games score 0. (Not applied
-  // when an admin is acting on someone's behalf.)
-  const lateJoiner = !actAs && !!deadline && (user?.createdAt ?? 0) > new Date(deadline).getTime();
+  // Deadline = the single soft/hard pick deadline (EOD Sunday). You can lock in
+  // any time up to here; games that kicked off before your lock-in score 0.
+  const deadline = PICK_DEADLINE_ISO;
 
   const {
     loaded,
@@ -146,7 +136,7 @@ export function PredictionsClient({
     locking,
     lockError,
     pendingCount,
-  } = usePredictions(targetUid, groups, deadline, !actAs && !lateJoiner, lateJoiner);
+  } = usePredictions(targetUid, groups, deadline, !actAs);
 
   // Compute the best 8 third-place teams from predicted match scores
   const autoThirdPlace = useMemo(() => {
@@ -217,24 +207,13 @@ export function PredictionsClient({
           <span className="ml-2 text-[var(--muted)]">
             {isUserLocked
               ? "Your picks are submitted."
-              : "The tournament has started — your picks were auto-saved."}
-          </span>
-        </div>
-      )}
-
-      {/* Late-joiner banner */}
-      {lateJoiner && !isAdmin && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-          <span className="font-semibold text-amber-300">⏳ You joined after kickoff.</span>
-          <span className="ml-2 text-[var(--muted)]">
-            Games already played score <b>0</b> for you. You can still predict every upcoming game —
-            each one locks at its own kickoff, and your picks save automatically.
+              : "The deadline has passed — picks that were never locked in were not submitted and score 0."}
           </span>
         </div>
       )}
 
       {/* Countdown */}
-      {!isLocked && deadline && !lateJoiner && <CountdownBanner deadline={deadline} />}
+      {!isLocked && deadline && <CountdownBanner deadline={deadline} />}
 
       {/* Stage tabs */}
       <div className="flex rounded-lg border border-[var(--border)] p-1 sm:w-fit">
@@ -327,9 +306,8 @@ export function PredictionsClient({
             </div>
           )}
 
-          {/* Lock In section — only shown to real users before the deadline.
-              Late joiners save per-pick automatically, so no lock-in step. */}
-          {!isAdmin && !isLocked && !lateJoiner && (
+          {/* Lock In section — only shown to real users before the deadline */}
+          {!isAdmin && !isLocked && (
             <div className="card p-5 space-y-3">
               {confirming ? (
                 <div className="space-y-4">

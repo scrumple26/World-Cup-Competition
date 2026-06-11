@@ -3,9 +3,9 @@ import { computeUserScore, type ActualData, type UserPredictions } from "./compu
 
 const actual: ActualData = {
   matches: [
-    { id: 1, isGroupStage: true, home: 2, away: 1 }, // group
-    { id: 2, isGroupStage: true, home: 0, away: 0 },
-    { id: 3, isGroupStage: false, home: 1, away: 1, decidedWinner: "home" }, // KO pens
+    { id: 1, isGroupStage: true, home: 2, away: 1, kickoff: 1_000 }, // group
+    { id: 2, isGroupStage: true, home: 0, away: 0, kickoff: 2_000 },
+    { id: 3, isGroupStage: false, home: 1, away: 1, kickoff: 3_000, decidedWinner: "home" }, // KO pens
   ],
   completedGroupOrders: { "Group A": [10, 20, 30, 40] },
   thirdAdvancing: [30, 31, 32, 33, 34, 35, 36, 37],
@@ -29,6 +29,34 @@ it("aggregates match, group-finish and third-place points correctly", () => {
   // even though penalties flipped the KO winner).
   expect(s.perfectScores).toBe(2);
   expect(s.perfectGroups).toBe(0);
+});
+
+it("scores 0 for games that kicked off before the user locked in", () => {
+  const preds: UserPredictions = {
+    matches: {
+      1: { fixtureId: 1, home: 2, away: 1, submittedAt: 0 }, // perfect, but kickoff 1000 < lock 2500
+      2: { fixtureId: 2, home: 1, away: 1, submittedAt: 0 }, // draw correct, kickoff 2000 < lock 2500
+      3: { fixtureId: 3, home: 1, away: 1, submittedAt: 0 }, // kickoff 3000 >= lock 2500 → counts
+    },
+    groupOrders: {},
+    thirdAdvancing: [],
+    lockedAt: 2_500,
+  };
+  const s = computeUserScore(actual, preds);
+  // Only match 3 (kickoff after lock-in) is scored: exact scoreline 0.5+0.5+1 = 2 KO pts.
+  expect(s.groupPts).toBe(0);
+  expect(s.knockoutPts).toBe(2);
+  expect(s.perfectScores).toBe(1);
+});
+
+it("scores 0 across the board when the user never locked in (lockedAt null)", () => {
+  const preds: UserPredictions = {
+    matches: { 1: { fixtureId: 1, home: 2, away: 1, submittedAt: 0 } },
+    groupOrders: {},
+    thirdAdvancing: [],
+    lockedAt: null,
+  };
+  expect(computeUserScore(actual, preds).total).toBe(0);
 });
 
 it("ignores group finish + third place until completed", () => {

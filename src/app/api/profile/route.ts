@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { assignFriendGroup, groupCounts } from "@/lib/groups";
-import { ADMIN_EMAIL } from "@/lib/config";
+import { ADMIN_EMAIL, isPastPickDeadline } from "@/lib/config";
 import { sendSignupNotification } from "@/lib/email";
 import type { FriendGroup, UserProfile } from "@/lib/types";
 
@@ -75,6 +75,14 @@ export async function POST(req: NextRequest) {
   const ref = db.collection("users").doc(uid);
   const existing = await ref.get();
   if (existing.exists) return NextResponse.json(existing.data());
+
+  // Hard lockout: no new accounts once the deadline has passed.
+  if (isPastPickDeadline() && email !== ADMIN_EMAIL) {
+    return NextResponse.json(
+      { error: "Sign-ups are closed — the pick deadline has passed." },
+      { status: 403 },
+    );
+  }
 
   // Balanced group assignment from current membership.
   const snap = await db.collection("users").get();

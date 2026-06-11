@@ -11,6 +11,8 @@ export interface ActualMatch {
   isGroupStage: boolean;
   home: number;
   away: number;
+  /** Kickoff time (epoch ms), used to ignore games that started before lock-in. */
+  kickoff: number;
   /** Knockout winner override (penalties/ET) when the scoreline is level. */
   decidedWinner?: Outcome;
 }
@@ -28,6 +30,12 @@ export interface UserPredictions {
   matches: Record<number, MatchPrediction>;
   groupOrders: Record<string, number[]>;
   thirdAdvancing: number[];
+  /**
+   * When the user locked in (epoch ms), or null/undefined if they never did.
+   * Games that kicked off before this time score 0; if undefined, no gating
+   * is applied (used by pure unit tests that pre-date the deadline model).
+   */
+  lockedAt?: number | null;
 }
 
 export interface UserScore {
@@ -53,10 +61,17 @@ export function computeUserScore(
   let outcomesTotal = 0;
   let partialScoreCorrect = 0;
 
-  // 1. Match results (group + knockout share the same scoring)
+  // 1. Match results (group + knockout share the same scoring).
+  // A game that kicked off before the user locked in scores 0 for them — late
+  // lock-ins don't get credit for games already underway. (lockedAt undefined →
+  // no gating, e.g. pure unit tests.)
+  const lockedAt = preds.lockedAt;
   for (const m of actual.matches) {
     const p = preds.matches[m.id];
     if (!p) continue;
+    if (lockedAt === null) continue;                 // never locked in → 0 every game
+    if (lockedAt !== undefined && m.kickoff < lockedAt) continue; // game started pre-lock-in
+
     const b = scoreMatch(
       { home: p.home, away: p.away },
       { home: m.home, away: m.away },
