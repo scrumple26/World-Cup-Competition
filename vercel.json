@@ -11,6 +11,14 @@
     {
       "path": "/api/feed/weekly",
       "schedule": "0 14 * * 0"
+    },
+    {
+      "path": "/api/reminders/predictions?phase=4h",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/reminders/predictions?phase=1h",
+      "schedule": "0 18 * * *"
     }
   ]
 }

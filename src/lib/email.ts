@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { ADMIN_EMAIL } from "./config";
 
 const FROM = "WC 2026 Competition <noreply@globalfootballcup.com>";
+const PREDICT_URL = "https://globalfootballcup.com/predictions";
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -90,6 +91,81 @@ export async function sendPasswordResetEmail(
        <p><a href="${resetLink}" class="btn">Reset password</a></p>
        <p>This link expires in <strong>1 hour</strong>. If you didn't request this, ignore this email.</p>`,
     ),
+  });
+
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/**
+ * Reminder to players who have NOT locked in their predictions yet, sent before
+ * the first match kicks off (and predictions lock).
+ *   phase "4h" — the 4-hours-to-go nudge with full how-to instructions.
+ *   phase "1h" — the final-hour, last-chance reminder.
+ */
+export async function sendPredictionReminderEmail(
+  toEmail: string,
+  firstName: string,
+  phase: "4h" | "1h",
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) return { ok: false, error: "Resend not configured" };
+
+  const name = (firstName ?? "").trim() || "there";
+
+  const subject =
+    phase === "4h"
+      ? "⏰ 4 hours left to predict your 72 group games"
+      : "🚨 Final hour — your predictions lock at kickoff";
+
+  const html =
+    phase === "4h"
+      ? baseTemplate(
+          "4 hours left to lock in your picks",
+          `<p>Hi ${name},</p>
+           <p>The World Cup is almost here — and your predictions <strong>aren't locked in yet</strong>.
+              You've got about <strong>4 hours</strong> until the first match kicks off, and once it does,
+              picks are locked for good.</p>
+           <p>You have <strong>72 group-stage games</strong> to predict. Here's how to get them in:</p>
+           <ol style="margin:0 0 16px;padding-left:20px;color:#c8d4ee;font-size:15px;line-height:1.7;">
+             <li>Open your <strong>Predictions</strong> page.</li>
+             <li>For each match, tap in your predicted <strong>score</strong> (e.g. 2–1). Every pick
+                 <strong>auto-saves</strong>, so you can stop and come back any time.</li>
+             <li>Set each group's <strong>finishing order</strong> and your <strong>third-place</strong> picks.</li>
+             <li>Scroll to the bottom, hit <strong>🔒 Lock In Predictions</strong>, review, then
+                 <strong>Confirm &amp; lock in</strong>.</li>
+           </ol>
+           <p>💡 <strong>In a hurry?</strong> Try the <strong>Flashcard</strong> version — it walks you through
+              one matchup at a time so you can rip through all 72 games fast. Open Predictions and switch
+              to the <strong>Flashcards</strong> tab.</p>
+           <p><a href="${PREDICT_URL}" class="btn">Make my predictions →</a></p>
+           <p>Good luck — may your bracket be ever in your favour. ⚽</p>
+           <p>Thanks,<br/><strong>The Global Football Cup Federation</strong></p>`,
+        )
+      : baseTemplate(
+          "Final hour — predictions lock at kickoff",
+          `<p>Hi ${name},</p>
+           <p>This is your <strong>last reminder</strong>. Predictions lock when the first match kicks off
+              in about <strong>1 hour</strong>, and you <strong>haven't locked yours in yet</strong>.</p>
+           <p>Any games you don't fill in will score <strong>zero</strong> — don't leave points on the table.</p>
+           <p>⚡ <strong>Fastest way to finish:</strong> open the <strong>Flashcard</strong> mode on your
+              Predictions page, blitz through the remaining matchups, then scroll down and hit
+              <strong>🔒 Lock In Predictions → Confirm</strong>.</p>
+           <p><a href="${PREDICT_URL}" class="btn">Finish my predictions now →</a></p>
+           <p>See you at kickoff.</p>
+           <p>Thanks,<br/><strong>The Global Football Cup Federation</strong></p>`,
+        );
+
+  const text =
+    phase === "4h"
+      ? `WC 2026 Competition\n\n4 hours left to predict your 72 group games\n\nHi ${name},\n\nThe World Cup is almost here and your predictions aren't locked in yet. You have about 4 hours until the first match kicks off, and once it does picks are locked for good.\n\nYou have 72 group-stage games to predict. How to get them in:\n\n1. Open your Predictions page: ${PREDICT_URL}\n2. For each match, enter your predicted score (e.g. 2-1). Every pick auto-saves, so you can stop and come back any time.\n3. Set each group's finishing order and your third-place picks.\n4. Scroll to the bottom, hit "Lock In Predictions", review, then Confirm & lock in.\n\nIn a hurry? Try the Flashcard version — it walks you through one matchup at a time so you can rip through all 72 games fast. Open Predictions and switch to the Flashcards tab.\n\nMake your predictions: ${PREDICT_URL}\n\nThanks,\nThe Global Football Cup Federation\nglobalfootballcup.com`
+      : `WC 2026 Competition\n\nFinal hour — your predictions lock at kickoff\n\nHi ${name},\n\nThis is your last reminder. Predictions lock when the first match kicks off in about 1 hour, and you haven't locked yours in yet.\n\nAny games you don't fill in will score zero — don't leave points on the table.\n\nFastest way to finish: open the Flashcard mode on your Predictions page, blitz through the remaining matchups, then scroll down and hit "Lock In Predictions" → Confirm.\n\nFinish your predictions: ${PREDICT_URL}\n\nThanks,\nThe Global Football Cup Federation\nglobalfootballcup.com`;
+
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject,
+    text,
+    html,
   });
 
   return error ? { ok: false, error: error.message } : { ok: true };
