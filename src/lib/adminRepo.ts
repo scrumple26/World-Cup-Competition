@@ -179,6 +179,39 @@ export async function generateTweetTest(): Promise<{ ok: boolean; tweets?: FauxT
   return { ok: res.ok, tweets: data.tweets, hasKey: data.hasKey, error: data.error };
 }
 
+export interface ReminderTestResult {
+  ok: boolean;
+  error?: string;
+  sent?: number;
+  count?: number;
+  recipients?: { email: string; firstName: string; teamName: string }[];
+}
+
+/**
+ * Trigger a prediction-reminder send via the admin route.
+ *   mode "test" — sends the chosen email only to the admin (to preview/approve).
+ *   mode "dry"  — returns the live recipient list without sending anything.
+ */
+export async function sendReminderTest(
+  phase: "4h" | "1h",
+  mode: "test" | "dry" = "test",
+): Promise<ReminderTestResult> {
+  if (USE_MOCK) return { ok: true };
+  const token = await adminToken();
+  const res = await fetch("/api/reminders/predictions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ phase, mode }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    sent?: number;
+    count?: number;
+    recipients?: { email: string; firstName: string; teamName: string }[];
+  };
+  return { ok: res.ok, error: data.error, sent: data.sent, count: data.count, recipients: data.recipients };
+}
+
 export async function unlockUser(uid: string): Promise<AdminResult> {
   if (USE_MOCK) return { ok: true, mock: true };
   return post("/api/admin/unlock", { uid });

@@ -7,7 +7,7 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, overrideResult, removeUser, setUserGroup, syncNow, unlockUser, uploadTeamLogo } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockUser, uploadTeamLogo } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PunditDesk } from "@/components/PunditDesk";
@@ -26,6 +26,8 @@ export function AdminClient() {
   const [predCounts, setPredCounts] = useState<Record<string, number>>({});
   const [lockStatus, setLockStatus] = useState<Record<string, boolean>>({});
   const [unlockingUid, setUnlockingUid] = useState<string | null>(null);
+  const [reminderBusy, setReminderBusy] = useState<string | null>(null);
+  const [reminderNote, setReminderNote] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [postText, setPostText] = useState("");
   const [postImage, setPostImage] = useState<File | null>(null);
@@ -156,6 +158,28 @@ export function AdminClient() {
     }
   }
 
+  async function runReminderTest(phase: "4h" | "1h", mode: "test" | "dry") {
+    const key = `${phase}-${mode}`;
+    setReminderBusy(key);
+    setReminderNote(null);
+    try {
+      const r = await sendReminderTest(phase, mode);
+      if (!r.ok) { setReminderNote(`Failed: ${r.error ?? "unknown error"}`); return; }
+      if (mode === "test") {
+        setReminderNote(`✓ Sent the ${phase} reminder to you (${user?.email}). Check your inbox.`);
+      } else {
+        const names = (r.recipients ?? []).map(x => x.teamName).join(", ");
+        setReminderNote(
+          `${r.count ?? 0} player(s) would get the ${phase} email${names ? `: ${names}` : " — nobody (everyone's locked in)."}`,
+        );
+      }
+    } catch {
+      setReminderNote("Request failed.");
+    } finally {
+      setReminderBusy(null);
+    }
+  }
+
   async function handleUnlock(uid: string, teamName: string) {
     if (!window.confirm(`Unlock ${teamName}'s predictions so they can edit and re-submit? Their current picks are kept.`)) return;
     setUnlockingUid(uid);
@@ -208,6 +232,28 @@ export function AdminClient() {
           {toast}
         </div>
       )}
+
+      {/* Prediction reminder emails */}
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">Prediction reminder emails</h2>
+        <p className="mb-3 text-sm text-[var(--muted)]">
+          Two reminders auto-send to players who haven&apos;t locked in: the <b>4-hour</b> note (10 AM CT,
+          full how-to + flashcard tip) and the <b>final-hour</b> note (1 PM CT). Send one to yourself to
+          review it, or dry-run to see exactly who would receive it right now.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button className="btn-primary" disabled={reminderBusy !== null} onClick={() => runReminderTest("4h", "test")}>
+            {reminderBusy === "4h-test" ? "Sending…" : "Send me the 4-hour email"}
+          </button>
+          <button className="btn-primary" disabled={reminderBusy !== null} onClick={() => runReminderTest("1h", "test")}>
+            {reminderBusy === "1h-test" ? "Sending…" : "Send me the final-hour email"}
+          </button>
+          <button className="btn-ghost" disabled={reminderBusy !== null} onClick={() => runReminderTest("4h", "dry")}>
+            {reminderBusy === "4h-dry" ? "Checking…" : "Preview recipients (no send)"}
+          </button>
+        </div>
+        {reminderNote && <p className="mt-2 text-xs text-[var(--muted)]">{reminderNote}</p>}
+      </section>
 
       {/* Pundit commentary tester */}
       <section className="card p-4">
