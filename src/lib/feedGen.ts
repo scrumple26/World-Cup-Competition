@@ -6,6 +6,7 @@ import { scoreMatch, outcomeOf } from "./scoring";
 import { getMatchEvents, getMatchStatistics } from "./apiFootball";
 import { generatePunditCommentary, type StatLeaderLine } from "./commentary";
 import { stakesForRound } from "./wc";
+import { gatherManagerContext, type ManagerContext, type StrugglingManager } from "./managerBanter";
 import { generateTweets, type TweetContext } from "./social";
 import type { FeedEntry, PerUserMatchResult, FeedLateDrama, MatchScorer } from "./feedTypes";
 
@@ -128,6 +129,7 @@ function buildTweetContext(
   lateDrama: FeedLateDrama | undefined,
   userProfiles: Map<string, UserProfile>,
   preTotalByUid: Map<string, number>,
+  managerCtx: ManagerContext,
 ): TweetContext {
   const perfectPickers = perUser.filter((u) => u.perfect).map((u) => u.teamName);
   const outcomePickers = perUser.filter((u) => u.outcomeCorrect && !u.perfect).map((u) => u.teamName);
@@ -161,6 +163,21 @@ function buildTweetContext(
     ...outcomePickers,
   ])).slice(0, 8);
 
+  // Strugglers: the standing/cold-run ones, plus anyone whose pick was badly off today.
+  const strugglers: StrugglingManager[] = [...managerCtx.strugglers];
+  const seen = new Set(strugglers.map((s) => s.team));
+  for (const u of perUser) {
+    if (u.outcomeCorrect || seen.has(u.teamName)) continue;
+    const manager = managerCtx.managers[u.teamName];
+    if (!manager) continue;
+    strugglers.push({
+      team: u.teamName, manager,
+      reason: `way off with today's pick (called ${u.predictedHome}-${u.predictedAway})`,
+    });
+    seen.add(u.teamName);
+    if (strugglers.length >= 8) break;
+  }
+
   return {
     homeCountry: match.homeTeamName,
     awayCountry: match.awayTeamName,
@@ -176,6 +193,8 @@ function buildTweetContext(
     varInvolved: !!lateDrama?.varInvolved,
     groupRisers,
     involvedTeams,
+    managers: managerCtx.managers,
+    strugglers,
   };
 }
 
@@ -202,6 +221,9 @@ export async function generateFeedEntries(
     const scoresSnap = await db.collection("scores").get();
     scoresSnap.forEach((d) => { const s = d.data() as ScoreDoc; preTotalByUid.set(s.uid, s.total ?? 0); });
   } catch { /* scores may not exist yet */ }
+
+  // Who's "managing" each team and which managers are struggling (for fan banter).
+  const managerCtx = await gatherManagerContext(db, [...userProfiles.values()]);
 
   let count = 0;
   for (const match of newlyCompleted) {
@@ -284,7 +306,7 @@ export async function generateFeedEntries(
 
     // Faux fan tweets about this match's goals/result + GFC angles.
     try {
-      const tweets = await generateTweets(buildTweetContext(match, perUser, scorers, lateDrama, userProfiles, preTotalByUid));
+      const tweets = await generateTweets(buildTweetContext(match, perUser, scorers, lateDrama, userProfiles, preTotalByUid, managerCtx));
       const now = new Date().toISOString();
       await Promise.all(tweets.map((t, i) => {
         const id = `${match.id}_${i}`;

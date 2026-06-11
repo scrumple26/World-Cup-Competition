@@ -8,6 +8,7 @@ import {
   generatePreMatchTweets, generateHalftimeTweets,
   type PreMatchPick, type PreMatchTweetContext, type HalftimeTweetContext,
 } from "@/lib/social";
+import { gatherManagerContext, type ManagerContext, type StrugglingManager } from "@/lib/managerBanter";
 import type { UserProfile, WcMatch, MatchPrediction } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -79,7 +80,7 @@ async function storeTweets(
   return tweets.length;
 }
 
-async function runPreMatch(db: Firestore, users: UserProfile[], now: number) {
+async function runPreMatch(db: Firestore, users: UserProfile[], now: number, mc: ManagerContext) {
   const snap = await db.collection("wcMatches")
     .where("kickoff", ">=", isoAt(now, PRE_LOWER_MIN))
     .where("kickoff", "<=", isoAt(now, PRE_UPPER_MIN))
@@ -104,6 +105,7 @@ async function runPreMatch(db: Firestore, users: UserProfile[], now: number) {
       homeCountry: m.homeTeamName, awayCountry: m.awayTeamName,
       matchHashtag: hashtagFor(m.homeTeamName, m.awayTeamName),
       minutesToKickoff, picks, groupmates,
+      managers: mc.managers, strugglers: mc.strugglers,
     };
     const tweets = await generatePreMatchTweets(ctx);
     if (tweets.length === 0) continue;
@@ -114,7 +116,7 @@ async function runPreMatch(db: Firestore, users: UserProfile[], now: number) {
   return { fired, matches: snap.size };
 }
 
-async function runHalftime(db: Firestore, users: UserProfile[], now: number) {
+async function runHalftime(db: Firestore, users: UserProfile[], now: number, mc: ManagerContext) {
   const snap = await db.collection("wcMatches")
     .where("kickoff", ">=", isoAt(now, -HALF_LOOKBACK_MIN))
     .where("kickoff", "<=", isoAt(now, -2))
@@ -155,11 +157,22 @@ async function runHalftime(db: Firestore, users: UserProfile[], now: number) {
     }
     if (onTrackPerfect.length + onTrackOutcome.length + wrongFooted.length === 0) continue;
 
+    // Wrong-footed teams (their call going the other way) are fair game for a
+    // gentle manager ribbing on top of the standing/cold-run strugglers.
+    const strugglers: StrugglingManager[] = [...mc.strugglers];
+    const seen = new Set(strugglers.map((s) => s.team));
+    for (const team of wrongFooted) {
+      if (seen.has(team) || !mc.managers[team]) continue;
+      strugglers.push({ team, manager: mc.managers[team], reason: "their call is going the wrong way at the break" });
+      seen.add(team);
+    }
+
     const ctx: HalftimeTweetContext = {
       homeCountry: m.homeTeamName, awayCountry: m.awayTeamName,
       matchHashtag: hashtagFor(m.homeTeamName, m.awayTeamName),
       homeScore: h, awayScore: a,
       onTrackPerfect, onTrackOutcome, wrongFooted,
+      managers: mc.managers, strugglers,
     };
     const tweets = await generateHalftimeTweets(ctx);
     if (tweets.length === 0) continue;
@@ -188,9 +201,10 @@ export async function GET(req: NextRequest) {
 
   const now = Date.now();
   const users = (await db.collection("users").get()).docs.map((d) => d.data() as UserProfile);
+  const mc = await gatherManagerContext(db, users);
 
-  const pre = await runPreMatch(db, users, now).catch(() => ({ fired: 0, matches: 0 }));
-  const half = await runHalftime(db, users, now).catch(() => ({ fired: 0, atHalftime: 0 }));
+  const pre = await runPreMatch(db, users, now, mc).catch(() => ({ fired: 0, matches: 0 }));
+  const half = await runHalftime(db, users, now, mc).catch(() => ({ fired: 0, atHalftime: 0 }));
 
   return NextResponse.json({ ok: true, preMatch: pre, halftime: half });
 }

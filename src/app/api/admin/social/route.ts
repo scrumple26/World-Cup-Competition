@@ -8,6 +8,14 @@ import {
 export const dynamic = "force-dynamic";
 
 const TEAMS = ["Galaxy Strikers", "Penalty Box Pros", "Last Minute Heroes", "VAR Wars", "Golden Boot Crew", "Midfield Maestros"];
+const SAMPLE_MANAGERS: Record<string, string> = {
+  "Galaxy Strikers": "Alex", "Penalty Box Pros": "Sam", "Last Minute Heroes": "Jordan",
+  "VAR Wars": "Casey", "Golden Boot Crew": "Taylor", "Midfield Maestros": "Morgan",
+};
+const SAMPLE_STRUGGLERS = [
+  { team: "VAR Wars", manager: "Casey", reason: "rooted to the bottom of Group A" },
+  { team: "Midfield Maestros", manager: "Morgan", reason: "4 straight matches without a point" },
+];
 const rint = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1));
 function pickN<T>(arr: T[], n: number): T[] {
   const c = [...arr]; const out: T[] = [];
@@ -42,6 +50,8 @@ function sampleTweetContext(): TweetContext {
     varInvolved: Math.random() < 0.5,
     groupRisers: [{ team: riser, group: "A" }],
     involvedTeams: TEAMS,
+    managers: SAMPLE_MANAGERS,
+    strugglers: SAMPLE_STRUGGLERS,
   };
 }
 
@@ -55,6 +65,7 @@ function samplePreMatchContext(): PreMatchTweetContext {
   return {
     homeCountry: "USA", awayCountry: "Senegal", matchHashtag: "#USAvsSenegal",
     minutesToKickoff: 30, picks, groupmates,
+    managers: SAMPLE_MANAGERS, strugglers: SAMPLE_STRUGGLERS,
   };
 }
 
@@ -64,6 +75,7 @@ function sampleHalftimeContext(): HalftimeTweetContext {
     homeCountry: "USA", awayCountry: "Senegal", matchHashtag: "#USAvsSenegal",
     homeScore: rint(0, 2), awayScore: rint(0, 2),
     onTrackPerfect: [a], onTrackOutcome: [b], wrongFooted: [c],
+    managers: SAMPLE_MANAGERS, strugglers: SAMPLE_STRUGGLERS,
   };
 }
 
