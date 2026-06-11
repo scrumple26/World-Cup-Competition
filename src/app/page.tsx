@@ -5,8 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
 import { buildGroupStandings, computeQualification } from "@/lib/league";
+import { useLiveGfcPoints } from "@/lib/useLiveGfcPoints";
 import { FRIEND_GROUPS } from "@/lib/wc";
-import { displayName } from "@/lib/types";
+import { displayName, type ScoreDoc } from "@/lib/types";
 import type { WeeklyMessage } from "@/app/api/config/weekly-message/route";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { LiveNow } from "@/components/LiveNow";
@@ -112,16 +113,30 @@ export default function Home() {
     return profile ? { user: profile, pts: top.pts, matchCount: last5.length } : null;
   }, [feedEntries, league]);
 
-  // Competition groups
+  // Live, provisional GFC points from in-progress matches.
+  const { deltaByUid, liveActive } = useLiveGfcPoints();
+
+  // Scores with live deltas folded in (provisional) when matches are in play.
+  const liveScores = useMemo(() => {
+    if (!league) return {};
+    if (!liveActive) return league.scores;
+    const out: Record<string, ScoreDoc> = {};
+    for (const [uid, s] of Object.entries(league.scores)) {
+      out[uid] = { ...s, total: s.total + (deltaByUid[uid] ?? 0) };
+    }
+    return out;
+  }, [league, deltaByUid, liveActive]);
+
+  // Competition groups (re-rank on the provisional totals while live)
   const groupStandings = useMemo(
-    () => league ? buildGroupStandings(league.users, league.scores) : null,
-    [league],
+    () => league ? buildGroupStandings(league.users, liveScores) : null,
+    [league, liveScores],
   );
 
   // Knockout qualification: winners (seeds 1-4), top-3 runners-up (5-7), wildcard (8).
   const qual = useMemo(
-    () => league ? computeQualification(league.users, league.scores) : null,
-    [league],
+    () => league ? computeQualification(league.users, liveScores) : null,
+    [league, liveScores],
   );
 
   // Overall leader (for feed banner)
@@ -226,7 +241,15 @@ export default function Home() {
       {/* Competition groups */}
       {groupStandings && (
         <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-[var(--muted)]">Your Competition</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-[var(--muted)]">
+            Your Competition
+            {liveActive && (
+              <span className="flex items-center gap-1 normal-case tracking-normal text-[10px] font-bold text-green-400">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+                points updating live
+              </span>
+            )}
+          </h2>
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             {FRIEND_GROUPS.map(g => (
               <div key={g} className="card overflow-hidden">
@@ -255,6 +278,9 @@ export default function Home() {
                           </span>
                         )}
                         <span className="flex-1 truncate font-medium">{row.user.teamName}</span>
+                        {liveActive && (deltaByUid[row.user.uid] ?? 0) > 0 && (
+                          <span className="text-[10px] font-bold text-green-400" title="Points from live matches">+{deltaByUid[row.user.uid]}</span>
+                        )}
                         <span className="text-xs font-bold">{row.score?.total ?? 0}</span>
                         {isRed && <span className="text-[10px] text-[var(--accent)]" title="Qualifies (group winner or top-3 runner-up)">●</span>}
                         {isPurple && <span className="text-[10px] text-purple-500" title="Current wildcard">●</span>}

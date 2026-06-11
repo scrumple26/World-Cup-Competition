@@ -3,18 +3,28 @@
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
 import { buildLeaderboard, buildChartSeries, buildRankSeries } from "@/lib/league";
+import { useLiveGfcPoints } from "@/lib/useLiveGfcPoints";
+import type { ScoreDoc } from "@/lib/types";
 import { StandingsTable } from "./StandingsTable";
 import { StandingsTrendChart } from "./StandingsTrendChart";
 
 export function LeaderboardClient() {
   const { user } = useAuth();
   const { data, loading } = useLeague();
+  const { deltaByUid, liveActive } = useLiveGfcPoints();
 
   if (loading || !data) {
     return <p className="text-[var(--muted)]">Loading leaderboard…</p>;
   }
 
-  const rows = buildLeaderboard(data.users, data.scores);
+  // Fold live, provisional points into the standings while matches are in play.
+  const liveScores: Record<string, ScoreDoc> = liveActive
+    ? Object.fromEntries(
+        Object.entries(data.scores).map(([uid, s]) => [uid, { ...s, total: s.total + (deltaByUid[uid] ?? 0) }]),
+      )
+    : data.scores;
+
+  const rows = buildLeaderboard(data.users, liveScores);
 
   const pointsSeries = buildChartSeries(
     data.users.map((u) => ({ teamName: u.teamName, history: data.scores[u.uid]?.history ?? [] })),
@@ -24,6 +34,12 @@ export function LeaderboardClient() {
   return (
     <div className="space-y-5">
       <div className="card p-4">
+        {liveActive && (
+          <p className="mb-2 flex items-center gap-1.5 text-xs text-green-400">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+            Standings updating live — provisional points from matches in play.
+          </p>
+        )}
         <StandingsTable rows={rows} highlightUid={user?.uid} showGroup />
         <p className="mt-2 text-[10px] text-[var(--muted)]">
           W% = correct outcome predictions · Score% = exact scoreline
