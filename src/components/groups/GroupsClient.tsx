@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
 import { buildGroupStandings, buildChartSeries, buildProjectionRows } from "@/lib/league";
+import { useLiveGfcPoints } from "@/lib/useLiveGfcPoints";
+import type { ScoreDoc } from "@/lib/types";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import { StandingsTable } from "../StandingsTable";
 import { CumulativeChart } from "../CumulativeChart";
@@ -13,13 +15,19 @@ import { WinProbabilityChart } from "../WinProbabilityChart";
 export function GroupsClient() {
   const { user } = useAuth();
   const { data, loading } = useLeague();
+  const { deltaByUid, liveActive } = useLiveGfcPoints();
   const [tab, setTab] = useState<"mine" | "all">("mine");
 
   if (loading || !data) {
     return <p className="text-[var(--muted)]">Loading standings…</p>;
   }
 
-  const standings = buildGroupStandings(data.users, data.scores);
+  const liveScores: Record<string, ScoreDoc> = liveActive
+    ? Object.fromEntries(
+        Object.entries(data.scores).map(([uid, s]) => [uid, { ...s, total: s.total + (deltaByUid[uid] ?? 0) }]),
+      )
+    : data.scores;
+  const standings = buildGroupStandings(data.users, liveScores);
   const myGroup = user?.friendGroup;
   const groupsToShow: FriendGroup[] =
     tab === "mine" && myGroup ? [myGroup] : [...FRIEND_GROUPS];
@@ -27,7 +35,15 @@ export function GroupsClient() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Groups</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Groups</h1>
+          {liveActive && (
+            <span className="flex items-center gap-1 text-[11px] font-bold text-green-400">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+              live
+            </span>
+          )}
+        </div>
         <div className="flex rounded-lg border border-[var(--border)] p-1">
           {(
             [

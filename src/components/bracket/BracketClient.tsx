@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
 import { buildBracket, type BracketMatchup, type SeedRow } from "@/lib/bracket";
+import { useLiveGfcPoints } from "@/lib/useLiveGfcPoints";
 import { FRIEND_STAGE_WC_ROUNDS } from "@/lib/wc";
 import { fetchFixtures } from "@/lib/wcClient";
 import { isPlayed } from "@/lib/wcMap";
@@ -20,6 +21,7 @@ const ROUND_MAP: Record<"r1" | "sf" | "final", string[]> = {
 export function BracketClient() {
   const { user } = useAuth();
   const { data, loading } = useLeague();
+  const { deltaByUid, liveActive } = useLiveGfcPoints();
   const [selected, setSelected] = useState<BracketMatchup | null>(null);
 
   if (loading || !data) {
@@ -28,11 +30,12 @@ export function BracketClient() {
 
   const rows: SeedRow[] = data.users.map((u) => {
     const s = data.scores[u.uid];
+    const liveDelta = liveActive ? (deltaByUid[u.uid] ?? 0) : 0;
     return {
       uid: u.uid,
       teamName: u.teamName,
       friendGroup: u.friendGroup,
-      groupPoints: s.groupPts || s.total,
+      groupPoints: (s.groupPts || s.total) + liveDelta,
       perfectScores: s.perfectScores,
       perfectGroups: s.perfectGroups,
     };
@@ -46,9 +49,17 @@ export function BracketClient() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold">Knockout Bracket</h2>
-        <span className={`chip ${started ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "bg-amber-500/15 text-amber-300"}`}>
-          {started ? "Live" : "Projected"}
-        </span>
+        <div className="flex items-center gap-2">
+          {liveActive && (
+            <span className="flex items-center gap-1 text-[11px] font-bold text-green-400">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+              live points
+            </span>
+          )}
+          <span className={`chip ${started ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "bg-amber-500/15 text-amber-300"}`}>
+            {started ? "Live" : "Projected"}
+          </span>
+        </div>
       </div>
 
       {!started && (
