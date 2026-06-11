@@ -3,7 +3,7 @@ import { buildGroupStandings, buildLeaderboard, buildChartSeries } from "./leagu
 import type { ScoreDoc, UserProfile } from "./types";
 
 function user(uid: string, group: "A" | "B" | "C" | "D"): UserProfile {
-  return { uid, email: `${uid}@x.com`, teamName: uid, friendGroup: group, isAdmin: false, createdAt: 0 };
+  return { uid, email: `${uid}@x.com`, teamName: uid, firstName: uid, lastName: "Test", friendGroup: group, isAdmin: false, createdAt: 0 };
 }
 function score(uid: string, total: number, ps = 0, pg = 0): ScoreDoc {
   return { uid, groupPts: total, knockoutPts: 0, total, perfectScores: ps, perfectGroups: pg, history: [] };

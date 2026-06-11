@@ -121,6 +121,11 @@ export function PredictionsClient({
     return kickoffs[0] ?? null;
   }, [data]);
 
+  // A late joiner signed up after the first kickoff. They edit upcoming games
+  // per-match (each commits immediately); missed games score 0. (Not applied
+  // when an admin is acting on someone's behalf.)
+  const lateJoiner = !actAs && !!deadline && (user?.createdAt ?? 0) > new Date(deadline).getTime();
+
   const {
     loaded,
     matches,
@@ -141,7 +146,7 @@ export function PredictionsClient({
     locking,
     lockError,
     pendingCount,
-  } = usePredictions(targetUid, groups, deadline, !actAs);
+  } = usePredictions(targetUid, groups, deadline, !actAs && !lateJoiner, lateJoiner);
 
   // Compute the best 8 third-place teams from predicted match scores
   const autoThirdPlace = useMemo(() => {
@@ -217,8 +222,19 @@ export function PredictionsClient({
         </div>
       )}
 
+      {/* Late-joiner banner */}
+      {lateJoiner && !isAdmin && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          <span className="font-semibold text-amber-300">⏳ You joined after kickoff.</span>
+          <span className="ml-2 text-[var(--muted)]">
+            Games already played score <b>0</b> for you. You can still predict every upcoming game —
+            each one locks at its own kickoff, and your picks save automatically.
+          </span>
+        </div>
+      )}
+
       {/* Countdown */}
-      {!isLocked && deadline && <CountdownBanner deadline={deadline} />}
+      {!isLocked && deadline && !lateJoiner && <CountdownBanner deadline={deadline} />}
 
       {/* Stage tabs */}
       <div className="flex rounded-lg border border-[var(--border)] p-1 sm:w-fit">
@@ -311,8 +327,9 @@ export function PredictionsClient({
             </div>
           )}
 
-          {/* Lock In section — only shown to real users before the deadline */}
-          {!isAdmin && !isLocked && (
+          {/* Lock In section — only shown to real users before the deadline.
+              Late joiners save per-pick automatically, so no lock-in step. */}
+          {!isAdmin && !isLocked && !lateJoiner && (
             <div className="card p-5 space-y-3">
               {confirming ? (
                 <div className="space-y-4">
