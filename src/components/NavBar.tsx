@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { ThemeToggle } from "./ThemeToggle";
 
 const TABS = [
+  { href: "/",             label: "Dashboard"    },
   { href: "/predictions",  label: "Predictions"  },
   { href: "/worldcup",     label: "World Cup"     },
   { href: "/competition",  label: "Competition"   },
