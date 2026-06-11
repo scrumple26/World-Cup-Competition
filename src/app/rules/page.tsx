@@ -60,14 +60,23 @@ export default function RulesPage() {
       {/* ---- Competition format ---- */}
       <Section title="How our competition works">
         <p>
-          16 friends compete in a season that mirrors the real World Cup. You&apos;re
-          split into <b>4 groups of 4</b> for a group stage, then the top scorers
-          advance to a head-to-head knockout bracket.
+          17 players compete in a season that mirrors the real World Cup. You&apos;re
+          split across <b>4 groups (A–D)</b> for a group stage, then <b>8 players
+          advance</b> to a head-to-head knockout bracket.
         </p>
+        <p className="font-semibold mt-1">Who advances to the knockout (8):</p>
         <ul className="ml-5 list-disc space-y-1">
+          <li><b>Seeds 1–4 — the four group winners</b> (1st in each group), ranked among themselves by points.</li>
+          <li><b>Seeds 5–7 — the three best runners-up</b> (2nd-place finishers), ranked by points.</li>
+          <li>
+            <b>Seed 8 — a wildcard:</b> the highest remaining point total anywhere. That
+            might be the 4th-best runner-up, or a strong 3rd-place finisher who has more
+            points than them.
+          </li>
+        </ul>
+        <ul className="ml-5 list-disc space-y-1 mt-2">
           <li>You earn points by predicting <b>real World Cup 2026 matches</b>.</li>
-          <li>The <b>top 2 point-getters in each group</b> (8 total) advance to the knockout.</li>
-          <li>Knockout seeds 1–8 are set by group-stage points; matchups are 1v8, 2v7, 3v6, 4v5.</li>
+          <li>Knockout matchups follow the seeds: 1v8, 2v7, 3v6, 4v5.</li>
           <li>Tiebreakers (group stage &amp; seeding): points → perfect scores → perfect groups → <b>coin flip</b>.</li>
           <li>
             In each knockout round you go head-to-head: whoever scores more points on

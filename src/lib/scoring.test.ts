@@ -152,21 +152,28 @@ describe("seedKnockout", () => {
     perfectGroups: 0,
   });
 
-  it("takes top 2 per friend-group and seeds 1-8 by points", () => {
+  it("seeds 4 winners 1-4, 3 best runners-up 5-7, and a wildcard at 8", () => {
     const rows: Row[] = [
-      mk("A1", "A", 30), mk("A2", "A", 25), mk("A3", "A", 10), mk("A4", "A", 5),
-      mk("B1", "B", 28), mk("B2", "B", 24), mk("B3", "B", 9), mk("B4", "B", 4),
-      mk("C1", "C", 27), mk("C2", "C", 23), mk("C3", "C", 8), mk("C4", "C", 3),
-      mk("D1", "D", 26), mk("D2", "D", 22), mk("D3", "D", 7), mk("D4", "D", 2),
+      // Group A: strong group — winner is low on points, but A3 (3rd) is high
+      mk("A1", "A", 10), mk("A2", "A", 9), mk("A3", "A", 8),
+      // Group B: a powerhouse — B2 runner-up has more points than every other winner
+      mk("B1", "B", 30), mk("B2", "B", 29), mk("B3", "B", 2),
+      // Group C
+      mk("C1", "C", 20), mk("C2", "C", 5), mk("C3", "C", 1),
+      // Group D: weak runner-up D2 (the 4th-best runner-up)
+      mk("D1", "D", 15), mk("D2", "D", 4), mk("D3", "D", 3),
     ];
-    const seeded = seedKnockout(rows);
-    expect(seeded).toHaveLength(8);
-    // none of the 3rd/4th placers should qualify
-    expect(seeded.map((s) => s.uid)).not.toContain("A3");
-    expect(seeded.map((s) => s.uid)).not.toContain("D4");
-    // seed 1 is the highest points overall (A1=30), seed 8 the lowest qualifier (D2=22)
-    expect(seeded[0].uid).toBe("A1");
-    expect(seeded[7].uid).toBe("D2");
+    const uids = seedKnockout(rows).map((s) => s.uid);
+    expect(uids).toHaveLength(8);
+    // Seeds 1-4: the four group winners ranked by points
+    expect(uids.slice(0, 4)).toEqual(["B1", "C1", "D1", "A1"]);
+    // A group winner (A1=10) still seeds above a higher-point runner-up (B2=29)
+    expect(uids.indexOf("A1")).toBeLessThan(uids.indexOf("B2"));
+    // Seeds 5-7: the three best runners-up
+    expect(uids.slice(4, 7)).toEqual(["B2", "A2", "C2"]);
+    // Seed 8: wildcard goes to A3 (8 pts), not the 4th runner-up D2 (4 pts)
+    expect(uids[7]).toBe("A3");
+    expect(uids).not.toContain("D2");
   });
 });
 

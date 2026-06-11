@@ -49,7 +49,7 @@ export const FRIEND_STAGE_WC_ROUNDS: Record<
 export const FRIEND_GROUPS = ["A", "B", "C", "D"] as const;
 export type FriendGroup = (typeof FRIEND_GROUPS)[number];
 
-export const PARTICIPANT_COUNT = 16;
+export const PARTICIPANT_COUNT = 17;
 export const GROUP_SIZE = 4;
 
 /** True for API-Football group-stage round strings (e.g. "Group Stage - 1"). */

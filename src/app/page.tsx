@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
-import { buildGroupStandings } from "@/lib/league";
+import { buildGroupStandings, computeQualification } from "@/lib/league";
 import { FRIEND_GROUPS } from "@/lib/wc";
 import { displayName } from "@/lib/types";
 import type { WeeklyMessage } from "@/app/api/config/weekly-message/route";
@@ -118,6 +118,12 @@ export default function Home() {
     [league],
   );
 
+  // Knockout qualification: winners (seeds 1-4), top-3 runners-up (5-7), wildcard (8).
+  const qual = useMemo(
+    () => league ? computeQualification(league.users, league.scores) : null,
+    [league],
+  );
+
   // Overall leader (for feed banner)
   const overallLeader = useMemo(() => {
     if (!league?.users.length) return undefined;
@@ -228,15 +234,19 @@ export default function Home() {
                   Group {g}
                 </div>
                 <div className="divide-y divide-[var(--border)]">
-                  {groupStandings[g].map((row, i) => {
+                  {groupStandings[g].map((row) => {
                     const isMe = row.user.uid === user?.uid;
+                    const status = qual?.statusByUid[row.user.uid] ?? "out";
+                    const isRed = status === "winner" || status === "runnerup";
+                    const isPurple = status === "wildcard";
+                    const rankColor = isRed ? "text-[var(--accent)]" : isPurple ? "text-purple-500" : "text-[var(--muted)]";
                     return (
                       <Link
                         key={row.user.uid}
                         href={`/team/${row.user.uid}`}
                         className={`flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--bg-elev)] ${isMe ? "bg-[var(--accent)]/10" : ""}`}
                       >
-                        <span className={`w-4 text-xs font-bold ${i < 2 ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>{row.rank}</span>
+                        <span className={`w-4 text-xs font-bold ${rankColor}`}>{row.rank}</span>
                         {row.user.logoUrl ? (
                           <img src={row.user.logoUrl} alt="" className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
                         ) : (
@@ -246,7 +256,8 @@ export default function Home() {
                         )}
                         <span className="flex-1 truncate font-medium">{row.user.teamName}</span>
                         <span className="text-xs font-bold">{row.score?.total ?? 0}</span>
-                        {i < 2 && <span className="text-[var(--accent)] text-[10px]">●</span>}
+                        {isRed && <span className="text-[10px] text-[var(--accent)]" title="Qualifies (group winner or top-3 runner-up)">●</span>}
+                        {isPurple && <span className="text-[10px] text-purple-500" title="Current wildcard">●</span>}
                       </Link>
                     );
                   })}
@@ -254,7 +265,48 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <p className="mt-1.5 text-[10px] text-[var(--muted)]">● = projects to qualify · red = your row</p>
+          <p className="mt-1.5 text-[10px] text-[var(--muted)]">
+            <span className="text-[var(--accent)]">●</span> qualifies (group winner or top-3 runner-up) ·{" "}
+            <span className="text-purple-500">●</span> current wildcard
+          </p>
+
+          {/* Wildcard race */}
+          {qual && qual.wildcardRace.length > 0 && (
+            <div className="card mt-4 overflow-hidden">
+              <div className="flex items-center gap-2 bg-[var(--bg-elev)] px-3 py-2 text-xs font-bold uppercase tracking-widest text-purple-500">
+                <span>🃏</span> Wildcard Race
+              </div>
+              <div className="divide-y divide-[var(--border)]">
+                {qual.wildcardRace.slice(0, 5).map((r, i) => {
+                  const isMe = r.user.uid === user?.uid;
+                  const isHolder = i === 0;
+                  return (
+                    <Link
+                      key={r.user.uid}
+                      href={`/team/${r.user.uid}`}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm transition hover:bg-[var(--bg-elev)] ${isMe ? "bg-[var(--accent)]/10" : ""}`}
+                    >
+                      <span className={`w-4 text-xs font-bold ${isHolder ? "text-purple-500" : "text-[var(--muted)]"}`}>{i + 1}</span>
+                      {r.user.logoUrl ? (
+                        <img src={r.user.logoUrl} alt="" className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--border)] text-[9px] font-bold text-[var(--muted)] flex-shrink-0">
+                          {r.user.teamName.charAt(0)}
+                        </span>
+                      )}
+                      <span className="flex-1 truncate font-medium">{r.user.teamName}</span>
+                      <span className="text-[10px] text-[var(--muted)]">Grp {r.group}</span>
+                      <span className="text-xs font-bold">{r.points}</span>
+                      {isHolder && <span className="text-[10px] text-purple-500" title="Holds the wildcard spot">●</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+              <p className="px-3 py-2 text-[10px] text-[var(--muted)]">
+                Top point-getters who aren&apos;t a group winner or top-3 runner-up. #1 takes the 8th and final knockout spot.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

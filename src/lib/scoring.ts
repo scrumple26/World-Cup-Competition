@@ -190,9 +190,11 @@ export function rankStandings<T extends StandingStats>(rows: T[]): T[] {
 }
 
 /**
- * Top 2 of each friend-group qualify for the knockout (8 total),
- * then seeded 1–8 across all qualifiers by the same comparator.
- * @param byGroup map of friendGroup → that group's members' stats
+ * Seed the 8-team knockout from the friend groups:
+ *   • Seeds 1–4: the four GROUP WINNERS (1st in each group), ranked by points.
+ *   • Seeds 5–7: the three best GROUP RUNNERS-UP (2nd in each group), by points.
+ *   • Seed 8: a WILDCARD — the highest-point team among everyone not yet
+ *     qualified (the 4th runner-up, or a 3rd-place finisher who outranks them).
  * @returns qualifiers ordered seed 1 (best) … seed 8
  */
 export function seedKnockout<T extends StandingStats & { friendGroup: string }>(
@@ -204,11 +206,25 @@ export function seedKnockout<T extends StandingStats & { friendGroup: string }>(
     arr.push(r);
     groups.set(r.friendGroup, arr);
   }
-  const qualifiers: T[] = [];
+
+  const winners: T[] = [];     // 1st in each group
+  const runnersUp: T[] = [];   // 2nd in each group
+  const rest: T[] = [];        // everyone 3rd or lower
   for (const arr of Array.from(groups.values())) {
-    qualifiers.push(...rankStandings<T>(arr).slice(0, 2));
+    const ranked = rankStandings<T>(arr);
+    if (ranked[0]) winners.push(ranked[0]);
+    if (ranked[1]) runnersUp.push(ranked[1]);
+    if (ranked.length > 2) rest.push(...ranked.slice(2));
   }
-  return rankStandings(qualifiers);
+
+  const seed1to4 = rankStandings(winners);              // group winners, by points
+  const rankedRunners = rankStandings(runnersUp);
+  const seed5to7 = rankedRunners.slice(0, 3);           // three best runners-up
+  // Wildcard pool: the leftover runner(s)-up + everyone 3rd or lower.
+  const wildcardPool = rankStandings([...rankedRunners.slice(3), ...rest]);
+  const seed8 = wildcardPool.slice(0, 1);
+
+  return [...seed1to4, ...seed5to7, ...seed8];
 }
 
 /**

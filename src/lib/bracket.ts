@@ -1,7 +1,9 @@
 /**
  * Pure builder for the friends' knockout bracket.
  *
- * Top 2 of each friend-group qualify (8), seeded 1–8 by group-stage points.
+ * Qualifiers (8): the 4 group winners (seeds 1–4), the 3 best group
+ * runners-up (seeds 5–7), and a wildcard — the best remaining team anywhere
+ * (seed 8). See seedKnockout() for the exact rule.
  * First round pairs 1v8, 2v7, 3v6, 4v5. Standard bracket flow:
  *   SF1 = W(M1) vs W(M4),  SF2 = W(M2) vs W(M3),  Final = W(SF1) vs W(SF2).
  * Before the knockout starts everything is "projected" from current standings.

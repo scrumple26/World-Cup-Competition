@@ -49,6 +49,63 @@ export function buildGroupStandings(
   return out;
 }
 
+export type QualStatus = "winner" | "runnerup" | "wildcard" | "out";
+
+export interface QualificationResult {
+  /** uid → current knockout status. */
+  statusByUid: Record<string, QualStatus>;
+  /** The wildcard pool (everyone not a winner or top-3 runner-up), best first.
+   *  Index 0 currently holds the wildcard (seed 8). */
+  wildcardRace: { user: UserProfile; score?: ScoreDoc; points: number; group: FriendGroup }[];
+}
+
+const EMPTY_STATS: StandingStats = { uid: "", groupPoints: 0, perfectScores: 0, perfectGroups: 0 };
+
+/**
+ * Determine who currently qualifies for the knockout under the seeding rule:
+ *   • the 4 group winners (seeds 1–4),
+ *   • the 3 best runners-up (seeds 5–7),
+ *   • a wildcard (seed 8) = best remaining anywhere.
+ */
+export function computeQualification(
+  users: UserProfile[],
+  scores: Record<string, ScoreDoc>,
+): QualificationResult {
+  const st = (u: UserProfile): StandingStats => {
+    const s = scores[u.uid];
+    return s ? stats(u, s) : { ...EMPTY_STATS, uid: u.uid };
+  };
+  const cmp = (a: UserProfile, b: UserProfile) => compareStanding(st(a), st(b));
+
+  const winners: UserProfile[] = [];
+  const runnersUp: UserProfile[] = [];
+  const rest: UserProfile[] = [];
+  for (const g of FRIEND_GROUPS) {
+    const ranked = users.filter((u) => u.friendGroup === g).sort(cmp);
+    if (ranked[0]) winners.push(ranked[0]);
+    if (ranked[1]) runnersUp.push(ranked[1]);
+    if (ranked.length > 2) rest.push(...ranked.slice(2));
+  }
+  const rankedRunners = [...runnersUp].sort(cmp);
+  const qualRunners = rankedRunners.slice(0, 3);
+  const wildcardPool = [...rankedRunners.slice(3), ...rest].sort(cmp);
+
+  const statusByUid: Record<string, QualStatus> = {};
+  for (const u of users) statusByUid[u.uid] = "out";
+  for (const u of winners) statusByUid[u.uid] = "winner";
+  for (const u of qualRunners) statusByUid[u.uid] = "runnerup";
+  if (wildcardPool[0]) statusByUid[wildcardPool[0].uid] = "wildcard";
+
+  const wildcardRace = wildcardPool.map((u) => ({
+    user: u,
+    score: scores[u.uid],
+    points: scores[u.uid]?.total ?? 0,
+    group: u.friendGroup,
+  }));
+
+  return { statusByUid, wildcardRace };
+}
+
 /** Overall leaderboard across all participants. */
 export function buildLeaderboard(
   users: UserProfile[],

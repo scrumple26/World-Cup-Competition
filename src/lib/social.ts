@@ -89,7 +89,7 @@ export async function generateTweets(c: TweetContext): Promise<Omit<FauxTweet, "
 
   const teams = c.involvedTeams.length ? c.involvedTeams : ["a Global Football Cup contender"];
   const ml = managerLines(teams, c.managers, c.strugglers);
-  const prompt = `You are generating playful fan posts ("tweets") for a social feed about the Global Football Cup — a 16-player World Cup 2026 prediction game where each player has a team name and earns points predicting real match scores (an exact score is a "perfect game").
+  const prompt = `You are generating playful fan posts ("tweets") for a social feed about the Global Football Cup — a 17-player World Cup 2026 prediction game where each player has a team name and earns points predicting real match scores (an exact score is a "perfect game").
 
 Each tweet is written by an over-the-top FAN of one specific Global Football Cup team. The fan ties a REAL match moment to their team's prediction fortunes.
 
@@ -247,7 +247,7 @@ export async function generatePreMatchTweets(c: PreMatchTweetContext): Promise<T
     })
     .join("\n");
 
-  const prompt = `You are generating playful fan posts ("tweets") for the Global Football Cup — a 16-player World Cup 2026 prediction game where each player has a team name and earns points predicting real match scores (an exact score is a "perfect game"). Players compete inside friend groups (A–D).
+  const prompt = `You are generating playful fan posts ("tweets") for the Global Football Cup — a 17-player World Cup 2026 prediction game where each player has a team name and earns points predicting real match scores (an exact score is a "perfect game"). Players compete in groups (A–D).
 
 It is about ${c.minutesToKickoff} minutes BEFORE kickoff of a real World Cup match: ${matchup}. Fans are hyping up or trash-talking each other's PREDICTIONS for this game — the match hasn't started, so this is all bravado, no results.
 
@@ -316,7 +316,7 @@ export async function generateHalftimeTweets(c: HalftimeTweetContext): Promise<T
   if (c.onTrackOutcome.length) f.push(`These GFC teams have the right RESULT so far (not the exact score): ${c.onTrackOutcome.join(", ")}.`);
   if (c.wrongFooted.length) f.push(`These GFC teams predicted the OTHER way and are sweating: ${c.wrongFooted.join(", ")}.`);
 
-  const prompt = `You are generating playful fan posts ("tweets") for the Global Football Cup — a 16-player World Cup 2026 prediction game where each player earns points predicting real match scores (an exact score is a "perfect game").
+  const prompt = `You are generating playful fan posts ("tweets") for the Global Football Cup — a 17-player World Cup 2026 prediction game where each player earns points predicting real match scores (an exact score is a "perfect game").
 
 It is HALF-TIME of a real World Cup match. A fan is reacting to how the live game is shaping up FOR THE PREDICTION RACE.
 

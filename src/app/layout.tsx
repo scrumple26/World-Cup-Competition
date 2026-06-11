@@ -17,7 +17,7 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: "World Cup Competition",
-  description: "A 16-person World Cup 2026 prediction league among friends.",
+  description: "A 17-person World Cup 2026 prediction competition.",
 };
 
 export default function RootLayout({

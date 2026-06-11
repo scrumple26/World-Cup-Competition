@@ -124,7 +124,7 @@ function buildPrompt(ctx: CommentaryContext): string {
 
   return `${PUNDIT_PROFILES}
 
-You're scripting the post-match desk for the Global Football Cup (a 16-player World Cup prediction competition). This is must-watch TV — three big personalities with real chemistry reacting to the game that just ended. Let them rip.
+You're scripting the post-match desk for the Global Football Cup (a 17-player World Cup prediction competition). This is must-watch TV — three big personalities with real chemistry reacting to the game that just ended. Let them rip.
 
 FACTS (every factual claim — score, players, stats, who made/lost a perfect pick — must come from here; you may dramatize, joke, and give opinions, but never invent facts):
 ${facts.map((f) => "- " + f).join("\n")}

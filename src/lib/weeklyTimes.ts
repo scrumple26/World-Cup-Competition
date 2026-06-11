@@ -239,7 +239,7 @@ interface NewspaperText {
 
 function factSheet(d: WeeklyData): string {
   const f: string[] = [];
-  f.push("This is the Global Football Cup — a 16-player World Cup 2026 prediction competition in 4 groups (A–D). Always call it the Global Football Cup (never a 'friends league' or 'prediction league'). Focus the paper on these players, with a light, witty tone.");
+  f.push("This is the Global Football Cup — a 17-player World Cup 2026 prediction competition in 4 groups (A–D). Always call it the Global Football Cup (never a 'friends league' or 'prediction league'). Focus the paper on these players, with a light, witty tone.");
   f.push("IMPORTANT: points equal = a TIE. A 0-point gap is NOT a lead — never say a team 'leads by 0'; say they are tied/level.");
   const leaders = d.groups.map((g) => {
     if (!g.teams[0]) return "";
@@ -271,7 +271,7 @@ async function generateNewspaperText(d: WeeklyData): Promise<NewspaperText> {
 
   const prompt = `${PUNDIT_PROFILES}
 
-You are writing this week's edition of "Pundit Football Times" — a witty newspaper for the Global Football Cup, a 16-player World Cup 2026 prediction competition (4 groups, A–D). Players score points by predicting match results; an exact score is a "perfect game". The paper is MOSTLY about the Global Football Cup race; real World Cup results are just the backdrop. Keep a light, humorous tone throughout — never call it a "friends league".
+You are writing this week's edition of "Pundit Football Times" — a witty newspaper for the Global Football Cup, a 17-player World Cup 2026 prediction competition (4 groups, A–D). Players score points by predicting match results; an exact score is a "perfect game". The paper is MOSTLY about the Global Football Cup race; real World Cup results are just the backdrop. Keep a light, humorous tone throughout — never call it a "friends league".
 
 FACTS (use ONLY these — never invent players, scores, standings, or events not listed):
 ${factSheet(d)}
