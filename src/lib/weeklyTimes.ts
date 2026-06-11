@@ -39,6 +39,10 @@ export interface WeeklyData {
   closeRaces: string[];
   movers: string[];
   matchesPlayed: number;
+  /** Teams on a current run of consecutive perfect (exact-score) picks. */
+  perfectStreaks: string[];
+  /** Teams on a current run of consecutive scored matches without a point. */
+  coldStreaks: string[];
   // World Cup watch (pundit context only — not displayed as tables)
   wcGroupLeaders: string[];
   wcClimbers: string[];
@@ -129,6 +133,36 @@ export async function gatherWeeklyData(db: Firestore): Promise<WeeklyData> {
     .map(([teamName, v]) => ({ teamName, logoUrl: v.logo, value: v.n }))
     .sort((a, b) => b.value - a.value).slice(0, 5);
 
+  // --- Streaks: walk EVERY scored match chronologically, per team ---
+  const seqByTeam = new Map<string, { perfect: boolean; pts: number }[]>();
+  const allFeedSnap = await db.collection("feedEntries").orderBy("kickoff").get().catch(() => null);
+  if (allFeedSnap) {
+    allFeedSnap.forEach((d) => {
+      const e = d.data() as FeedEntry;
+      for (const u of e.perUser) {
+        const arr = seqByTeam.get(u.teamName) ?? [];
+        arr.push({ perfect: u.perfect, pts: u.pts });
+        seqByTeam.set(u.teamName, arr);
+      }
+    });
+  }
+  const perfectRuns: { team: string; n: number }[] = [];
+  const coldRuns: { team: string; n: number }[] = [];
+  for (const [team, seq] of seqByTeam) {
+    let p = 0;
+    for (let i = seq.length - 1; i >= 0 && seq[i].perfect; i--) p++;
+    if (p >= 2) perfectRuns.push({ team, n: p });
+    let c = 0;
+    for (let i = seq.length - 1; i >= 0 && seq[i].pts === 0; i--) c++;
+    if (c >= 3) coldRuns.push({ team, n: c });
+  }
+  const perfectStreaks = perfectRuns
+    .sort((a, b) => b.n - a.n)
+    .map((r) => `${r.team} has nailed the exact score ${r.n} matches running`);
+  const coldStreaks = coldRuns
+    .sort((a, b) => b.n - a.n)
+    .map((r) => `${r.team} has gone ${r.n} straight matches without a point`);
+
   // --- Close races: only the battles to finish 1st or 2nd (the qualifying spots) in each group ---
   const closeRaces: string[] = [];
   for (const g of groups) {
@@ -189,6 +223,7 @@ export async function gatherWeeklyData(db: Firestore): Promise<WeeklyData> {
 
   return {
     weekStart, weekEnd, groups, wcResults, topPoints, topPerfects, closeRaces, movers, matchesPlayed,
+    perfectStreaks, coldStreaks,
     wcGroupLeaders, wcClimbers, wcKnockoutWinners, speculationCue, wcRanks,
   };
 }
@@ -218,6 +253,8 @@ function factSheet(d: WeeklyData): string {
   const perf = d.topPerfects.filter((p) => p.value > 0);
   if (perf.length) f.push("Most perfect (exact-score) picks: " + perf.map((p) => `${p.teamName} (${p.value})`).join(", ") + ".");
   if (d.movers.length) f.push("Standings movement: " + d.movers.slice(0, 10).join("; ") + ".");
+  if (d.perfectStreaks.length) f.push("HOT STREAKS (perfect-pick runs): " + d.perfectStreaks.slice(0, 5).join("; ") + ".");
+  if (d.coldStreaks.length) f.push("COLD STREAKS (pointless runs): " + d.coldStreaks.slice(0, 5).join("; ") + ".");
   if (d.closeRaces.length) f.push("Tight races: " + d.closeRaces.join(" "));
   if (d.wcResults.length) f.push("Real World Cup results this week (backdrop): " + d.wcResults.map((r) => `${r.homeTeam} ${r.homeScore}-${r.awayScore} ${r.awayTeam}`).join(", ") + ".");
   if (d.wcKnockoutWinners.length) f.push("Knockout winners: " + d.wcKnockoutWinners.join("; ") + ".");
@@ -240,9 +277,9 @@ FACTS (use ONLY these — never invent players, scores, standings, or events not
 ${factSheet(d)}
 
 Produce:
-- headline: a punchy front-page headline about the friends' league this week.
-- subhead: a one-sentence deck.
-- body: 2-4 short, witty newspaper paragraphs about the Global Football Cup race — who surged, perfect games, group movement, tightest battles. Reference the real WC results only as context. No markdown.
+- headline: a punchy, tabloid back-page splash about the Global Football Cup this week. Lean HARD into wordplay — a pun or play on a GFC team name, a player's name, or a football cliché. Make it grabby and a little cheeky (think tabloid sports desk), and keep it about the GFC race, not the real World Cup. Avoid generic "Team X leads the way"-style headlines.
+- subhead: a one-sentence deck that lands the joke or sharpens the angle.
+- body: 2-4 short, witty newspaper paragraphs about the Global Football Cup race — who surged, perfect games, hot and cold streaks, group movement, tightest battles. Reference the real WC results only as context. No markdown.
 - punditColumn: a tight, conversational exchange of EXACTLY 6 lines among the three pundits (no more). Make it a real desk chat: one pundit asks a question and another answers, they build on each other, agree and disagree.
   * Lead with SUBSTANCE — analyze the Global Football Cup race, and also work in the real World Cup: call out teams that climbed their group or won their knockout match, and if a SPECULATION fact is provided, have them give their take on whether that team can win its group / advance.
   * Banter a bit, but it's NOT all banter — keep ribbing and the occasional World Cup recollection as seasoning (roughly 1 in 4 lines), not the whole conversation.
