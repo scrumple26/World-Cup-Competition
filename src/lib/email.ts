@@ -130,7 +130,6 @@ export async function sendPredictionReminderEmail(
              <li>Open your <strong>Predictions</strong> page.</li>
              <li>For each match, tap in your predicted <strong>score</strong> (e.g. 2–1). Every pick
                  <strong>auto-saves</strong>, so you can stop and come back any time.</li>
-             <li>Set each group's <strong>finishing order</strong> and your <strong>third-place</strong> picks.</li>
              <li>Scroll to the bottom, hit <strong>🔒 Lock In Predictions</strong>, review, then
                  <strong>Confirm &amp; lock in</strong>.</li>
            </ol>
@@ -157,7 +156,7 @@ export async function sendPredictionReminderEmail(
 
   const text =
     phase === "4h"
-      ? `WC 2026 Competition\n\n4 hours left to predict your 72 group games\n\nHi ${name},\n\nThe World Cup is almost here and your predictions aren't locked in yet. You have about 4 hours until the first match kicks off, and once it does picks are locked for good.\n\nYou have 72 group-stage games to predict. How to get them in:\n\n1. Open your Predictions page: ${PREDICT_URL}\n2. For each match, enter your predicted score (e.g. 2-1). Every pick auto-saves, so you can stop and come back any time.\n3. Set each group's finishing order and your third-place picks.\n4. Scroll to the bottom, hit "Lock In Predictions", review, then Confirm & lock in.\n\nIn a hurry? Try the Flashcard version — it walks you through one matchup at a time so you can rip through all 72 games fast. Open Predictions and switch to the Flashcards tab.\n\nMake your predictions: ${PREDICT_URL}\n\nThanks,\nThe Global Football Cup Federation\nglobalfootballcup.com`
+      ? `WC 2026 Competition\n\n4 hours left to predict your 72 group games\n\nHi ${name},\n\nThe World Cup is almost here and your predictions aren't locked in yet. You have about 4 hours until the first match kicks off, and once it does picks are locked for good.\n\nYou have 72 group-stage games to predict. How to get them in:\n\n1. Open your Predictions page: ${PREDICT_URL}\n2. For each match, enter your predicted score (e.g. 2-1). Every pick auto-saves, so you can stop and come back any time.\n3. Scroll to the bottom, hit "Lock In Predictions", review, then Confirm & lock in.\n\nIn a hurry? Try the Flashcard version — it walks you through one matchup at a time so you can rip through all 72 games fast. Open Predictions and switch to the Flashcards tab.\n\nMake your predictions: ${PREDICT_URL}\n\nThanks,\nThe Global Football Cup Federation\nglobalfootballcup.com`
       : `WC 2026 Competition\n\nFinal hour — your predictions lock at kickoff\n\nHi ${name},\n\nThis is your last reminder. Predictions lock when the first match kicks off in about 1 hour, and you haven't locked yours in yet.\n\nAny games you don't fill in will score zero — don't leave points on the table.\n\nFastest way to finish: open the Flashcard mode on your Predictions page, blitz through the remaining matchups, then scroll down and hit "Lock In Predictions" → Confirm.\n\nFinish your predictions: ${PREDICT_URL}\n\nThanks,\nThe Global Football Cup Federation\nglobalfootballcup.com`;
 
   const { error } = await resend.emails.send({
