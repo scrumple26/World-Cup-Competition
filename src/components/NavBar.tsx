@@ -11,7 +11,6 @@ const TABS = [
   { href: "/predictions",  label: "Predictions"  },
   { href: "/worldcup",     label: "World Cup"     },
   { href: "/competition",  label: "Competition"   },
-  { href: "/social",       label: "Buzz"          },
   { href: "/rules",        label: "Rules"         },
 ];
 
