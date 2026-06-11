@@ -53,6 +53,51 @@ function roundOrder(round: string): number {
   return idx === -1 ? 99 : idx;
 }
 
+const LIVE_STATUSES = new Set(["1H", "HT", "2H", "ET", "P", "BT", "SUSP", "INT"]);
+
+/**
+ * Overlay in-progress group-match scores onto the official standings to produce
+ * a PROVISIONAL table — i.e. where teams would sit if the current live scores
+ * held. Pure; computed on the client, so it costs nothing in Firestore.
+ */
+function applyLiveResults(
+  standings: WcGroupStanding[],
+  liveMatches: WcMatch[],
+): { standings: WcGroupStanding[]; liveTeamIds: Set<number> } {
+  const liveTeamIds = new Set<number>();
+  const live = liveMatches.filter(
+    (m) => m.round.startsWith("Group Stage") && LIVE_STATUSES.has(m.status) && m.goals.home != null && m.goals.away != null,
+  );
+  if (live.length === 0) return { standings, liveTeamIds };
+
+  const out = standings.map((g) => {
+    const rows = g.rows.map((r) => ({ ...r }));
+    const byId = new Map(rows.map((r) => [r.teamId, r] as const));
+    for (const m of live) {
+      const home = byId.get(m.homeTeamId);
+      const away = byId.get(m.awayTeamId);
+      if (!home || !away) continue; // match isn't in this group
+      const hg = m.goals.home as number;
+      const ag = m.goals.away as number;
+      liveTeamIds.add(m.homeTeamId);
+      liveTeamIds.add(m.awayTeamId);
+      home.played += 1; away.played += 1;
+      home.gf += hg; home.ga += ag; away.gf += ag; away.ga += hg;
+      home.goalsDiff = home.gf - home.ga;
+      away.goalsDiff = away.gf - away.ga;
+      if (hg > ag) { home.points += 3; home.win += 1; away.lose += 1; }
+      else if (hg < ag) { away.points += 3; away.win += 1; home.lose += 1; }
+      else { home.points += 1; away.points += 1; home.draw += 1; away.draw += 1; }
+    }
+    rows.sort((a, b) =>
+      b.points - a.points || b.goalsDiff - a.goalsDiff || b.gf - a.gf || a.teamName.localeCompare(b.teamName),
+    );
+    rows.forEach((r, i) => { r.rank = i + 1; });
+    return { ...g, rows };
+  });
+  return { standings: out, liveTeamIds };
+}
+
 // ---- tab types ----
 
 type Tab = "standings" | "schedule" | "knockout";
@@ -68,10 +113,11 @@ export function WorldCupClient() {
   const { data: wc, loading } = useWcData();
   const [tab, setTab] = useState<Tab>("standings");
   const [liveStandings, setLiveStandings] = useState<WcGroupStanding[] | null>(null);
+  const [liveMatches, setLiveMatches] = useState<WcMatch[]>([]);
   const [pollingActive, setPollingActive] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Poll standings every 15 min while we're in the active game window for today.
+  // Poll standings every minute while we're in the active game window for today.
   useEffect(() => {
     if (!wc || tab !== "standings") return;
 
@@ -97,7 +143,36 @@ export function WorldCupClient() {
     };
   }, [wc, tab]);
 
-  const displayStandings = liveStandings ?? wc?.standings ?? [];
+  // Poll in-progress group matches every minute so standings can show a live,
+  // provisional table. Pure client overlay — no Firestore reads/writes.
+  useEffect(() => {
+    if (!wc || tab !== "standings") { setLiveMatches([]); return; }
+    const ids = wc.fixtures
+      .filter((m) => m.round.startsWith("Group Stage"))
+      .filter((m) => {
+        const k = new Date(m.kickoff).getTime();
+        return k <= Date.now() && Date.now() - k < 3 * 3600_000 && !["FT", "AET", "PEN"].includes(m.status);
+      })
+      .map((m) => m.id);
+    if (ids.length === 0) { setLiveMatches([]); return; }
+    let active = true;
+    const idsStr = ids.join(",");
+    async function poll() {
+      try {
+        const res = await fetch(`/api/wc/live?ids=${idsStr}`);
+        if (!res.ok) return;
+        const d = (await res.json()) as { matches?: WcMatch[] };
+        if (active) setLiveMatches((d.matches ?? []).filter((m) => LIVE_STATUSES.has(m.status)));
+      } catch { /* silent */ }
+    }
+    poll();
+    const t = setInterval(poll, 60_000);
+    return () => { active = false; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wc, tab]);
+
+  const officialStandings = liveStandings ?? wc?.standings ?? [];
+  const { standings: displayStandings, liveTeamIds } = applyLiveResults(officialStandings, liveMatches);
 
   if (loading || !wc) {
     return <p className="text-[var(--muted)]">Loading…</p>;
@@ -140,7 +215,7 @@ export function WorldCupClient() {
         <p className="text-[var(--muted)]">No data yet — use Admin → Sync now to pull live data.</p>
       )}
 
-      {!noData && tab === "standings" && <StandingsView standings={displayStandings} />}
+      {!noData && tab === "standings" && <StandingsView standings={displayStandings} liveTeamIds={liveTeamIds} />}
       {!noData && tab === "schedule"  && <ScheduleClient hideFilter />}
       {!noData && tab === "knockout"  && <KnockoutView fixtures={wc.fixtures} />}
     </div>
@@ -149,18 +224,26 @@ export function WorldCupClient() {
 
 // ---- Standings ----
 
-function StandingsView({ standings }: { standings: WcGroupStanding[] }) {
+function StandingsView({ standings, liveTeamIds }: { standings: WcGroupStanding[]; liveTeamIds: Set<number> }) {
   if (standings.length === 0) {
     return <p className="text-[var(--muted)]">Standings not yet available.</p>;
   }
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {standings.map((g) => <GroupTable key={g.group} group={g} />)}
+    <div className="space-y-3">
+      {liveTeamIds.size > 0 && (
+        <p className="flex items-center gap-1.5 text-xs text-green-400">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+          Provisional standings — updating live as goals go in.
+        </p>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {standings.map((g) => <GroupTable key={g.group} group={g} liveTeamIds={liveTeamIds} />)}
+      </div>
     </div>
   );
 }
 
-function GroupTable({ group: g }: { group: WcGroupStanding }) {
+function GroupTable({ group: g, liveTeamIds }: { group: WcGroupStanding; liveTeamIds: Set<number> }) {
   return (
     <div className="card overflow-hidden">
       <div className="bg-[var(--bg-elev)] px-3 py-2 text-xs font-bold uppercase tracking-widest text-[var(--accent-2)]">
@@ -192,6 +275,9 @@ function GroupTable({ group: g }: { group: WcGroupStanding }) {
                 <span className="flex items-center gap-1.5">
                   {r.logo && <img src={r.logo} alt="" width={16} height={16} className="h-4 w-4 rounded-sm object-contain flex-shrink-0" />}
                   <span className="truncate font-medium">{r.teamName}</span>
+                  {liveTeamIds.has(r.teamId) && (
+                    <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-green-500" title="Playing now — provisional" />
+                  )}
                 </span>
               </td>
               <td className="px-1 py-2 text-center text-[var(--muted)]">{r.played}</td>

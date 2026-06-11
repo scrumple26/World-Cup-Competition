@@ -16,6 +16,25 @@ export async function GET(req: NextRequest) {
   const db = getAdminDb();
   if (!db) return NextResponse.json({ matches: {}, groups: {}, third: { advancing: [] } });
 
+  // Cheap summary mode (used by the nav bar): counts + lock status via
+  // aggregation, ~4 reads instead of reading the full prediction set (~85).
+  if (req.nextUrl.searchParams.get("summary")) {
+    const predRef = db.collection("predictions").doc(uid);
+    const [mAgg, gAgg, tSnap, lockSnap] = await Promise.all([
+      predRef.collection("matches").count().get(),
+      predRef.collection("groups").count().get(),
+      predRef.collection("meta").doc("thirdPlace").get(),
+      predRef.collection("meta").doc("userLock").get(),
+    ]);
+    const thirdCount = tSnap.exists ? ((tSnap.data() as ThirdPlacePrediction).advancing ?? []).length : 0;
+    return NextResponse.json({
+      matchCount: mAgg.data().count,
+      groupCount: gAgg.data().count,
+      thirdCount,
+      userLocked: lockSnap.exists,
+    });
+  }
+
   const [mSnap, gSnap, tSnap, lockSnap, draftSnap] = await Promise.all([
     db.collection("predictions").doc(uid).collection("matches").get(),
     db.collection("predictions").doc(uid).collection("groups").get(),

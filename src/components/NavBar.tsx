@@ -49,15 +49,30 @@ export function NavBar() {
       }
     } catch { /* ignore */ }
 
-    // Nothing in localStorage — check Firestore (for locked-in users)
-    fetch(`/api/predictions?uid=${user.uid}`)
+    // Nothing in localStorage — use the cheap summary endpoint, cached in
+    // sessionStorage so we don't re-read on every navigation. ~4 reads per
+    // 10 min instead of the full prediction set (~85) on each page change.
+    const cacheKey = `pred_summary_${user.uid}`;
+    try {
+      const raw = sessionStorage.getItem(cacheKey);
+      if (raw) {
+        const c = JSON.parse(raw) as { t: number; s: PredStatus };
+        if (Date.now() - c.t < 10 * 60_000) { setPredStatus(c.s); return; }
+      }
+    } catch { /* ignore */ }
+
+    fetch(`/api/predictions?uid=${user.uid}&summary=1`)
       .then(r => r.json())
-      .then(d => setPredStatus({
-        locked:     !!d.userLocked,
-        matchCount: Object.keys(d.matches ?? {}).length,
-        groupCount: Object.keys(d.groups  ?? {}).length,
-        thirdCount: (d.third?.advancing ?? []).length,
-      }))
+      .then(d => {
+        const s: PredStatus = {
+          locked:     !!d.userLocked,
+          matchCount: d.matchCount ?? 0,
+          groupCount: d.groupCount ?? 0,
+          thirdCount: d.thirdCount ?? 0,
+        };
+        setPredStatus(s);
+        try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), s })); } catch { /* ignore */ }
+      })
       .catch(() => {});
   }, [user?.uid, pathname]);
 
