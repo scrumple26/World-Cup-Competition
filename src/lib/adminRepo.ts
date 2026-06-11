@@ -214,6 +214,20 @@ export async function sendReminderTest(
   return { ok: res.ok, error: data.error, sent: data.sent, count: data.count, recipients: data.recipients };
 }
 
+export interface ReminderPhaseState { at: number; candidates: number; sent: number; failed: number; }
+export interface ReminderStatus { sent4h?: ReminderPhaseState; sent1h?: ReminderPhaseState; }
+
+/** Read whether the 4-hour / final-hour reminder emails have been sent, with counts. */
+export async function getReminderStatus(): Promise<ReminderStatus> {
+  if (USE_MOCK) return {};
+  const token = await adminToken();
+  const res = await fetch("/api/reminders/predictions?mode=status", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json().catch(() => ({}))) as { status?: ReminderStatus };
+  return data.status ?? {};
+}
+
 export async function unlockUser(uid: string): Promise<AdminResult> {
   if (USE_MOCK) return { ok: true, mock: true };
   return post("/api/admin/unlock", { uid });

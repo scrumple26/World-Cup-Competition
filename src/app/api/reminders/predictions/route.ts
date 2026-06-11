@@ -131,6 +131,14 @@ export async function GET(req: NextRequest) {
   const admin = isCron ? { uid: "cron" } : await requireAdmin(req);
   if (!isCron && !admin) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
+  // Read-only status: what (if anything) has been sent so far.
+  if (!isCron && req.nextUrl.searchParams.get("mode") === "status") {
+    const db = getAdminDb();
+    if (!db) return NextResponse.json({ error: "not configured" }, { status: 503 });
+    const state = (await db.collection("reminders").doc("predictions").get()).data() ?? {};
+    return NextResponse.json({ ok: true, status: state });
+  }
+
   const phase = parsePhase(req);
   if (!phase) return NextResponse.json({ error: "phase must be 4h or 1h" }, { status: 400 });
 

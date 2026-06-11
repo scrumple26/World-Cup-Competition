@@ -7,7 +7,7 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockUser, uploadTeamLogo } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, getReminderStatus, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockUser, uploadTeamLogo, type ReminderStatus } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PunditDesk } from "@/components/PunditDesk";
@@ -28,6 +28,7 @@ export function AdminClient() {
   const [unlockingUid, setUnlockingUid] = useState<string | null>(null);
   const [reminderBusy, setReminderBusy] = useState<string | null>(null);
   const [reminderNote, setReminderNote] = useState<string | null>(null);
+  const [reminderStatus, setReminderStatus] = useState<ReminderStatus | null>(null);
   const [posting, setPosting] = useState(false);
   const [postText, setPostText] = useState("");
   const [postImage, setPostImage] = useState<File | null>(null);
@@ -64,6 +65,9 @@ export function AdminClient() {
       .catch(() => {});
   };
   useEffect(() => { loadPosts(); }, []);
+
+  // Whether the scheduled prediction reminders have actually gone out.
+  useEffect(() => { getReminderStatus().then(setReminderStatus).catch(() => {}); }, []);
 
   // Load prediction counts + lock status for each player
   useEffect(() => {
@@ -252,6 +256,22 @@ export function AdminClient() {
             {reminderBusy === "4h-dry" ? "Checking…" : "Preview recipients (no send)"}
           </button>
         </div>
+        {reminderStatus && (
+          <div className="mt-3 space-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] px-3 py-2 text-xs">
+            {([["4-hour", reminderStatus.sent4h], ["Final-hour", reminderStatus.sent1h]] as const).map(([label, s]) => (
+              <div key={label} className="flex items-center gap-2">
+                <span className="w-20 font-semibold">{label}:</span>
+                {s ? (
+                  <span className="text-green-400">
+                    ✓ sent to {s.sent}/{s.candidates} player(s){s.failed ? `, ${s.failed} failed` : ""} · {new Date(s.at).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} CT
+                  </span>
+                ) : (
+                  <span className="text-[var(--muted)]">not sent yet</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {reminderNote && <p className="mt-2 text-xs text-[var(--muted)]">{reminderNote}</p>}
       </section>
 
