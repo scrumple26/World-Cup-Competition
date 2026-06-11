@@ -70,11 +70,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true, reason: "no newly completed matches" });
     }
 
-    // Auto-fill any missing predictions, then build feeds + recompute.
+    // Recompute scores first — it's the core job and must not be blocked by the
+    // cosmetic feed/AI step (which can throw or hit a Firestore quota).
     const autoFilled = await autoFillMissingPredictions(db, wcMatches);
-    const usersSnap = await db.collection("users").get();
-    const feedCount = await generateFeedEntries(db, needsFeed, usersSnap);
     const scored = await recomputeAllScores(db);
+
+    // Feed generation is non-critical: never let it fail the sync.
+    let feedCount = 0;
+    try {
+      const usersSnap = await db.collection("users").get();
+      feedCount = await generateFeedEntries(db, needsFeed, usersSnap);
+    } catch (e) {
+      console.error("[post-match sync] feed generation failed (scores still updated):", e);
+    }
 
     return NextResponse.json({ ok: true, autoFilled, feedCount, usersScored: scored });
   } catch (err) {

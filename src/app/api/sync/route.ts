@@ -101,16 +101,25 @@ async function handle(req: NextRequest) {
       console.error("[sync] fill-teams failed:", e);
     }
 
-    // 6. Generate feed entries for matches that just became FT/AET/PEN this sync
+    // 6. Recompute everyone's scores from the latest results. This is the core
+    //    job — it must run even if the cosmetic feed/AI step below fails or hits
+    //    a Firestore quota, so it goes BEFORE feed generation (and feed is
+    //    wrapped). Otherwise a feed failure would leave every score at 0.
+    const scored = await recomputeAllScores(db);
+
+    // 7. Generate feed entries for matches that just became FT/AET/PEN this sync.
+    //    Non-critical: never let this block or fail the sync.
     const playedStatuses = new Set(["FT", "AET", "PEN"]);
     const newlyCompleted = wcMatches.filter(
       (m) => playedStatuses.has(m.status) && !playedStatuses.has(prevStatuses.get(String(m.id)) ?? ""),
     );
-    const usersSnap = await db.collection("users").get();
-    const feedCount = await generateFeedEntries(db, newlyCompleted, usersSnap);
-
-    // 7. Recompute everyone's scores from the latest results
-    const scored = await recomputeAllScores(db);
+    let feedCount = 0;
+    try {
+      const usersSnap = await db.collection("users").get();
+      feedCount = await generateFeedEntries(db, newlyCompleted, usersSnap);
+    } catch (e) {
+      console.error("[sync] feed generation failed (scores still updated):", e);
+    }
 
     return NextResponse.json({
       ok: true,
