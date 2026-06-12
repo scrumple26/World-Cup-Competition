@@ -34,9 +34,20 @@ function getAdminApp(): App | null {
   return app;
 }
 
+let firestore: Firestore | null = null;
+
 export function getAdminDb(): Firestore | null {
   const a = getAdminApp();
-  return a ? getFirestore(a) : null;
+  if (!a) return null;
+  if (!firestore) {
+    firestore = getFirestore(a);
+    // Ignore (drop) undefined fields instead of throwing on them. Without this,
+    // a single optional field left undefined — e.g. a logo-less profile's
+    // `logoUrl` nested inside a feed entry's perUser array — makes the entire
+    // .set() throw, which silently aborted ALL feed/pundit/tweet generation.
+    firestore.settings({ ignoreUndefinedProperties: true });
+  }
+  return firestore;
 }
 
 export function getAdminAuth(): Auth | null {
