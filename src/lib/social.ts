@@ -2,6 +2,7 @@ import "server-only";
 
 import type { FauxTweet } from "./feedTypes";
 import type { StrugglingManager } from "./managerBanter";
+import { geminiGenerate } from "./gemini";
 
 /**
  * AI faux fan-tweets. Each tweet is written by a fan of a Global Football Cup
@@ -108,33 +109,26 @@ ${ml.instruction}
 - Be accurate to the FACTS. No markdown.`;
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.98,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  fanOf: { type: "STRING" },
-                  handle: { type: "STRING" },
-                  displayName: { type: "STRING" },
-                  text: { type: "STRING" },
-                },
-                required: ["fanOf", "text"],
-              },
+    const res = await geminiGenerate(GEMINI_MODEL, key, {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.98,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              fanOf: { type: "STRING" },
+              handle: { type: "STRING" },
+              displayName: { type: "STRING" },
+              text: { type: "STRING" },
             },
+            required: ["fanOf", "text"],
           },
-        }),
+        },
       },
-    );
+    });
     if (!res.ok) return fallbackTweets(c, matchup);
     const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -164,31 +158,24 @@ async function callTweetModel(prompt: string): Promise<RawTweet[] | null> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.98,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  fanOf: { type: "STRING" }, handle: { type: "STRING" },
-                  displayName: { type: "STRING" }, text: { type: "STRING" },
-                },
-                required: ["fanOf", "text"],
-              },
+    const res = await geminiGenerate(GEMINI_MODEL, key, {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.98,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              fanOf: { type: "STRING" }, handle: { type: "STRING" },
+              displayName: { type: "STRING" }, text: { type: "STRING" },
             },
+            required: ["fanOf", "text"],
           },
-        }),
+        },
       },
-    );
+    });
     if (!res.ok) return null;
     const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -358,104 +345,145 @@ function fallbackHalftime(c: HalftimeTweetContext, matchup: string): TweetOut[] 
   return [];
 }
 
-// ── Live goal buzz: a fan reacts to a goal the MOMENT it goes in ───────────────
+// ── Live goal buzz: batched ONE Gemini call per half ──────────────────────────
 
-export interface GoalTweetContext {
-  homeCountry: string;
-  awayCountry: string;
-  matchHashtag: string;
+/** One goal's facts, with the running score and GFC angle at that moment. */
+export interface GoalEvent {
   scorer: string;            // the player who scored (or whose OG it was)
   scoringCountry: string;    // the country CREDITED with the goal
   minute: number;
   kind: "goal" | "owngoal" | "penalty";
   runningHome: number;       // score immediately AFTER this goal
   runningAway: number;
-  /** GFC teams whose FINAL predicted score now equals the running score. */
+  /** GFC teams whose FINAL predicted score equalled the running score. */
   nowPerfect: string[];
-  /** GFC teams whose predicted RESULT matches the current running result. */
+  /** GFC teams whose predicted RESULT matched the running result. */
   nowOutcome: string[];
+}
+
+export interface GoalBatchContext {
+  homeCountry: string;
+  awayCountry: string;
+  matchHashtag: string;
+  half: 1 | 2;               // which half these goals came from
+  goals: GoalEvent[];        // chronological order; one tweet returned per goal
   managers?: Record<string, string>;
   strugglers?: StrugglingManager[];
 }
 
+export interface PickLite { teamName: string; home: number; away: number; }
+export interface IndexedGoalEvent { index: number; half: 1 | 2; event: GoalEvent; }
+
+const goalRunSign = (n: number): number => (n > 0 ? 1 : n < 0 ? -1 : 0);
+
 /**
- * One fan tweet reacting to a single goal as it happens. Designed to be fired
- * live (drip) by the buzz cron, one tweet per goal. Falls back to a template
- * without a Gemini key so a goal NEVER goes untweeted.
+ * Rebuild per-goal running scores + GFC angle from a match's goals (chronological).
+ * `index` is the goal's position in the match (used for the deterministic tweet
+ * doc id); `half` buckets by minute (≤45 → 1, else 2; extra-time counts as 2).
+ * Pure and shared by the live buzz drip and the sync backfill.
  */
-export async function generateGoalTweets(c: GoalTweetContext): Promise<TweetOut[]> {
+export function reconstructGoalEvents(
+  goals: { side: "home" | "away"; isOwnGoal: boolean; isPenalty: boolean; scorer: string; elapsed: number }[],
+  homeCountry: string,
+  awayCountry: string,
+  picks: PickLite[],
+): IndexedGoalEvent[] {
+  let runH = 0, runA = 0;
+  const out: IndexedGoalEvent[] = [];
+  for (let i = 0; i < goals.length; i++) {
+    const g = goals[i];
+    const isHome = g.side === "home";
+    if ((isHome && !g.isOwnGoal) || (!isHome && g.isOwnGoal)) runH++; else runA++;
+    const cur = goalRunSign(runH - runA);
+    const nowPerfect: string[] = [];
+    const nowOutcome: string[] = [];
+    for (const p of picks) {
+      if (p.home === runH && p.away === runA) nowPerfect.push(p.teamName);
+      else if (goalRunSign(p.home - p.away) === cur) nowOutcome.push(p.teamName);
+    }
+    const credited = (isHome !== g.isOwnGoal) ? homeCountry : awayCountry;
+    out.push({
+      index: i,
+      half: g.elapsed <= 45 ? 1 : 2,
+      event: {
+        scorer: g.scorer, scoringCountry: credited, minute: g.elapsed,
+        kind: g.isOwnGoal ? "owngoal" : g.isPenalty ? "penalty" : "goal",
+        runningHome: runH, runningAway: runA, nowPerfect, nowOutcome,
+      },
+    });
+  }
+  return out;
+}
+
+/**
+ * Generate fan tweets for a batch of goals (one half of a match) in a SINGLE
+ * Gemini call — one tweet per goal, in order. Batching by half keeps us well
+ * under the Gemini free-tier rate limit. Falls back to per-goal templates so a
+ * goal never goes untweeted.
+ */
+export async function generateGoalBatchTweets(c: GoalBatchContext): Promise<TweetOut[]> {
   const matchup = `${c.homeCountry} vs ${c.awayCountry}`;
-  const involved = [...c.nowPerfect, ...c.nowOutcome];
+  if (c.goals.length === 0) return [];
+
+  const involved = [...new Set(c.goals.flatMap((g) => [...g.nowPerfect, ...g.nowOutcome]))];
   const ml = managerLines(involved, c.managers, c.strugglers);
 
-  const goalDesc =
-    c.kind === "owngoal"
-      ? `${c.scorer} scores an OWN GOAL, credited to ${c.scoringCountry}`
-      : c.kind === "penalty"
-        ? `${c.scorer} converts a PENALTY for ${c.scoringCountry}`
-        : `${c.scorer} scores for ${c.scoringCountry}`;
-  const f: string[] = [
-    `GOAL at ${c.minute}': ${goalDesc}.`,
-    `Running score now: ${c.homeCountry} ${c.runningHome}-${c.runningAway} ${c.awayCountry} (match still in play).`,
-  ];
-  if (c.nowPerfect.length) f.push(`If it ENDS on this score, these GFC teams land a PERFECT game: ${c.nowPerfect.join(", ")}.`);
-  if (c.nowOutcome.length) f.push(`These GFC teams currently have the right RESULT: ${c.nowOutcome.join(", ")}.`);
+  const goalLines = c.goals.map((g, i) => {
+    const og = g.kind === "owngoal" ? " (own goal)" : g.kind === "penalty" ? " (penalty)" : "";
+    const angle = g.nowPerfect.length
+      ? ` On track for a PERFECT game if it ends here: ${g.nowPerfect.join(", ")}.`
+      : g.nowOutcome.length ? ` Right result so far for: ${g.nowOutcome.join(", ")}.` : "";
+    return `Goal ${i + 1}: ${g.scorer} for ${g.scoringCountry}${og} at ${g.minute}' — running score ${c.homeCountry} ${g.runningHome}-${g.runningAway} ${c.awayCountry}.${angle}`;
+  }).join("\n");
 
-  const teams = involved.length ? involved : ["a Global Football Cup contender"];
-  const prompt = `You are generating a single playful fan post ("tweet") for the Global Football Cup — a 17-player World Cup 2026 prediction game where each player has a team name and earns points predicting real match scores (an exact score is a "perfect game").
+  const prompt = `You are generating playful fan posts ("tweets") for the Global Football Cup — a 17-player World Cup 2026 prediction game where each player has a team name and earns points predicting real match scores (an exact score is a "perfect game").
 
-A goal has JUST been scored in a LIVE real World Cup match. A fan of one Global Football Cup team is reacting in real time, through the lens of the prediction race.
+These are reactions to the goals from the ${c.half === 1 ? "FIRST" : "SECOND"} half of a real World Cup match (${matchup}). The game was still in play — react in the moment, never invent a final result.
 
 FACTS (use ONLY these — never invent players, scores, teams, or standings):
-${f.join("\n")}${ml.facts ? "\n" + ml.facts : ""}
+${goalLines}${ml.facts ? "\n" + ml.facts : ""}
 
-Global Football Cup teams you may write as a fan of: ${teams.join(", ")}.
-
-Write 1 short tweet. Return: fanOf (one of the GFC teams above), handle (a fun @handle referencing that team), displayName (a fun fan name), and text.
+Write EXACTLY ONE tweet PER GOAL, in the SAME ORDER as listed above. Each tweet is by a fan of one Global Football Cup team reacting to that goal through the prediction-race lens. For each, return: fanOf (a GFC team — prefer one listed as on-track / right-result for that goal, otherwise any contender), handle (a fun @handle), displayName (a fun fan name), and text.
 Rules:
-- Excited, in-the-moment fan energy reacting to the goal RIGHT NOW. 1-2 sentences. It's LIVE — do not invent a final result; the game is ongoing.
-- Tie the goal to a GFC angle when one exists (a team now on track for a perfect game, a team whose call this goal just helped or hurt), otherwise just react to the goal itself.
-- You MAY chirp another Global Football Cup team named above.
+- Excited, in-the-moment energy. 1-2 sentences each.
+- Tie each goal to its GFC angle when one is given; otherwise just react to the goal.
+- VARY the voices and phrasing across the tweets — don't reuse the same sentence shape.
+- You MAY chirp another Global Football Cup team.
 ${ml.instruction}
-- MUST end with hashtags including "${c.matchHashtag}" and "${REQUIRED_TAG}", plus 1 fun made-up hashtag.
+- Each tweet MUST end with hashtags including "${c.matchHashtag}" and "${REQUIRED_TAG}", plus 1 fun made-up hashtag.
 - No markdown.`;
 
   const parsed = await callTweetModel(prompt);
-  if (!parsed || parsed.length === 0) return fallbackGoal(c, matchup);
-  const mapped = mapRaw(parsed, c.matchHashtag, matchup, 1);
-  return mapped.length ? mapped : fallbackGoal(c, matchup);
+  const mapped = parsed ? mapRaw(parsed, c.matchHashtag, matchup, c.goals.length) : [];
+  // One tweet per goal, in order; fill any gaps with the template.
+  return c.goals.map((g, i) => mapped[i] ?? fallbackGoalTweet(c, g));
 }
 
-function fallbackGoal(c: GoalTweetContext, matchup: string): TweetOut[] {
+/** Deterministic, varied per-goal tweet used when the AI is unavailable. */
+function fallbackGoalTweet(
+  c: { homeCountry: string; awayCountry: string; matchHashtag: string },
+  g: GoalEvent,
+): TweetOut {
   const tag = (s: string) => enforceHashtags(s, c.matchHashtag);
-  const score = `${c.homeCountry} ${c.runningHome}-${c.runningAway} ${c.awayCountry}`;
-  const star = c.nowPerfect[0] ?? c.nowOutcome[0];
+  const score = `${c.homeCountry} ${g.runningHome}-${g.runningAway} ${c.awayCountry}`;
+  const star = g.nowPerfect[0] ?? g.nowOutcome[0];
   const team = star ?? "GFC Faithful";
-  const og = c.kind === "owngoal" ? " (OWN GOAL!)" : c.kind === "penalty" ? " from the spot 🎯" : "";
-
-  // Vary the GFC angle so a flurry of goals doesn't read identically.
-  const angle = c.nowPerfect.length
-    ? ` ${c.nowPerfect[0]} is dead-on for a perfect game if it ends here! 👀`
-    : c.nowOutcome.length
-      ? ` ${c.nowOutcome[0]} liking how this is shaping up.`
-      : "";
-
-  // Vary the lead line too, picked deterministically from the goal's facts.
+  const og = g.kind === "owngoal" ? " (OWN GOAL!)" : g.kind === "penalty" ? " from the spot 🎯" : "";
+  const angle = g.nowPerfect.length
+    ? ` ${g.nowPerfect[0]} is dead-on for a perfect game if it ends here! 👀`
+    : g.nowOutcome.length ? ` ${g.nowOutcome[0]} liking how this is shaping up.` : "";
   const leads = [
-    `⚽ GOAL! ${c.scorer} (${c.scoringCountry})${og} at ${c.minute}'. ${score}.`,
-    `It's in!! ${c.scorer} strikes for ${c.scoringCountry}${og} — ${c.minute}'. ${score}.`,
-    `${c.scoringCountry} score!${og} ${c.scorer} on ${c.minute}'. Now ${score}.`,
-    `BANG. ${c.scorer}${og} makes it ${score} at ${c.minute}'.`,
+    `⚽ GOAL! ${g.scorer} (${g.scoringCountry})${og} at ${g.minute}'. ${score}.`,
+    `It's in!! ${g.scorer} strikes for ${g.scoringCountry}${og} — ${g.minute}'. ${score}.`,
+    `${g.scoringCountry} score!${og} ${g.scorer} on ${g.minute}'. Now ${score}.`,
+    `BANG. ${g.scorer}${og} makes it ${score} at ${g.minute}'.`,
   ];
-  const lead = leads[(c.minute + c.runningHome + c.runningAway) % leads.length];
-
-  return [{
-    fanOf: team,
-    handle: slugHandle(team),
-    displayName: `${team} Fan`,
+  const lead = leads[(g.minute + g.runningHome + g.runningAway) % leads.length];
+  return {
+    fanOf: team, handle: slugHandle(team), displayName: `${team} Fan`,
     text: tag(`${lead}${angle} #GoalAlert`),
-    matchup,
-  }];
+    matchup: `${c.homeCountry} vs ${c.awayCountry}`,
+  };
 }
 
 function fallbackTweets(c: TweetContext, matchup: string): Omit<FauxTweet, "id" | "fixtureId" | "createdAt">[] {

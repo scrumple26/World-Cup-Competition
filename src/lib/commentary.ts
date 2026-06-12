@@ -2,6 +2,7 @@ import "server-only";
 
 import type { PunditLine, PunditSpeaker, MatchScorer, FeedLateDrama } from "./feedTypes";
 import type { MatchStakes } from "./wc";
+import { geminiGenerate } from "./gemini";
 
 /**
  * AI pundit commentary via Google Gemini.
@@ -162,31 +163,24 @@ export async function generatePunditCommentary(ctx: CommentaryContext): Promise<
   if (!key) return fallbackCommentary(ctx);
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: buildPrompt(ctx) }] }],
-          generationConfig: {
-            temperature: 0.97,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  speaker: { type: "STRING", enum: SPEAKERS },
-                  text: { type: "STRING" },
-                },
-                required: ["speaker", "text"],
-              },
+    const res = await geminiGenerate(GEMINI_MODEL, key, {
+      contents: [{ role: "user", parts: [{ text: buildPrompt(ctx) }] }],
+      generationConfig: {
+        temperature: 0.97,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              speaker: { type: "STRING", enum: SPEAKERS },
+              text: { type: "STRING" },
             },
+            required: ["speaker", "text"],
           },
-        }),
+        },
       },
-    );
+    });
     if (!res.ok) return fallbackCommentary(ctx);
     const data = (await res.json()) as GeminiResponse;
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;

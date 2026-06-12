@@ -5,15 +5,14 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
 import { getLiveFixtures, getMatchEvents } from "@/lib/apiFootball";
 import {
-  generatePreMatchTweets, generateHalftimeTweets, generateGoalTweets,
+  generatePreMatchTweets, generateHalftimeTweets, generateGoalBatchTweets, reconstructGoalEvents,
   type PreMatchPick, type PreMatchTweetContext, type HalftimeTweetContext,
-  type GoalTweetContext,
 } from "@/lib/social";
 import { gatherManagerContext, type ManagerContext, type StrugglingManager } from "@/lib/managerBanter";
 import type { UserProfile, WcMatch, MatchPrediction } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120; // headroom for batched goal calls + 429 backoff
 
 const PRE_LOWER_MIN = 15;   // tweet pre-match when kickoff is 15–45 min out
 const PRE_UPPER_MIN = 45;
@@ -188,12 +187,13 @@ async function runHalftime(db: Firestore, users: UserProfile[], now: number, mc:
 }
 
 /**
- * Live goal buzz — drip one fan tweet per goal as matches play out.
+ * Live goal buzz — fan tweets for goals, generated ONCE PER HALF (a single
+ * Gemini call per half: the first half once it's over, the second half at full
+ * time). Batching by half keeps us under the Gemini free-tier rate limit.
  *
- * Failproof + idempotent: every goal maps to a DETERMINISTIC tweet doc id
- * `goal_<fixtureId>_<goalIndex>`. We skip any goal whose doc already exists, so
- * re-running never duplicates and the same scheme lets a later sync backfill any
- * goal this cron missed (throttled crons, transient API blips). One tweet/goal.
+ * Idempotent per half via buzzMarkers (goalsH1/goalsH2) and per goal via the
+ * deterministic tweet doc id `goal_<fixtureId>_<goalIndex>` — the same id the
+ * sync backfill uses, so the two never duplicate.
  */
 async function runGoals(db: Firestore, users: UserProfile[], now: number, mc: ManagerContext) {
   const snap = await db.collection("wcMatches")
@@ -212,50 +212,53 @@ async function runGoals(db: Firestore, users: UserProfile[], now: number, mc: Ma
     const fx = fxById.get(m.id);
     if (!fx || !LIVE_STATES.has(fx.fixture.status.short)) continue;
     liveCount++;
+    const status = fx.fixture.status.short;
+
+    // A half is "closed" (ready to tweet) once the match has moved past it.
+    const h1Ready = status !== "1H";                     // HT/2H/ET/BT/P/FT…
+    const h2Ready = ["FT", "AET", "PEN"].includes(status);
+
+    const markerRef = db.collection("buzzMarkers").doc(String(m.id));
+    const marker = (await markerRef.get()).data() ?? {};
+    if ((marker.goalsH1 || !h1Ready) && (marker.goalsH2 || !h2Ready)) continue;
 
     const events = await getMatchEvents(m.id).catch(() => []);
     const goals = events.filter((e) => e.type === "Goal" && e.detail !== "Missed Penalty");
-    if (goals.length === 0) continue;
-
-    const picks = await gatherPicks(db, users, m.id);
-
-    let runH = 0, runA = 0;
-    for (let i = 0; i < goals.length; i++) {
-      const g = goals[i];
-      const isHomeTeam = g.team.id === m.homeTeamId;
-      const isOwnGoal = g.detail === "Own Goal";
-      // A home own-goal counts for away, and vice-versa.
-      if ((isHomeTeam && !isOwnGoal) || (!isHomeTeam && isOwnGoal)) runH++;
-      else runA++;
-
-      const id = `goal_${m.id}_${i}`;
-      const ref = db.collection("tweets").doc(id);
-      if ((await ref.get().catch(() => null))?.exists) continue; // already tweeted
-
-      const cur = sign(runH - runA);
-      const nowPerfect: string[] = [];
-      const nowOutcome: string[] = [];
-      for (const r of picks) {
-        if (r.home === runH && r.away === runA) nowPerfect.push(r.u.teamName);
-        else if (sign(r.home - r.away) === cur) nowOutcome.push(r.u.teamName);
-      }
-
-      const creditedCountry = (isHomeTeam !== isOwnGoal) ? m.homeTeamName : m.awayTeamName;
-      const ctx: GoalTweetContext = {
-        homeCountry: m.homeTeamName, awayCountry: m.awayTeamName,
-        matchHashtag: hashtagFor(m.homeTeamName, m.awayTeamName),
+    const picks = (await gatherPicks(db, users, m.id)).map((r) => ({ teamName: r.u.teamName, home: r.home, away: r.away }));
+    const indexed = reconstructGoalEvents(
+      goals.map((g) => ({
+        side: g.team.id === m.homeTeamId ? "home" : "away",
+        isOwnGoal: g.detail === "Own Goal",
+        isPenalty: g.detail.includes("Penalty"),
         scorer: g.player?.name ?? "Someone",
-        scoringCountry: creditedCountry,
-        minute: g.time.elapsed + (g.time.extra ?? 0),
-        kind: isOwnGoal ? "owngoal" : g.detail.includes("Penalty") ? "penalty" : "goal",
-        runningHome: runH, runningAway: runA,
-        nowPerfect, nowOutcome,
-        managers: mc.managers, strugglers: mc.strugglers,
-      };
-      const tweets = await generateGoalTweets(ctx);
-      if (tweets.length === 0) continue;
-      await ref.set({ id, fixtureId: m.id, createdAt: new Date().toISOString(), ...tweets[0] });
-      fired++;
+        elapsed: g.time.elapsed + (g.time.extra ?? 0),
+      })),
+      m.homeTeamName, m.awayTeamName, picks,
+    );
+
+    for (const half of [1, 2] as const) {
+      const ready = half === 1 ? h1Ready : h2Ready;
+      const markerKey = half === 1 ? "goalsH1" : "goalsH2";
+      if (!ready || marker[markerKey]) continue;
+
+      const segment = indexed.filter((x) => x.half === half);
+      if (segment.length > 0) {
+        const tweets = await generateGoalBatchTweets({
+          homeCountry: m.homeTeamName, awayCountry: m.awayTeamName,
+          matchHashtag: hashtagFor(m.homeTeamName, m.awayTeamName),
+          half, goals: segment.map((x) => x.event),
+          managers: mc.managers, strugglers: mc.strugglers,
+        });
+        await Promise.all(segment.map((x, k) => {
+          const t = tweets[k];
+          if (!t) return Promise.resolve();
+          const id = `goal_${m.id}_${x.index}`;
+          return db.collection("tweets").doc(id).set({ id, fixtureId: m.id, createdAt: new Date().toISOString(), ...t });
+        }));
+        fired += segment.length;
+      }
+      // Mark the half done even if it had no goals, so we don't re-check it.
+      await markerRef.set({ [markerKey]: new Date().toISOString() }, { merge: true });
     }
   }
   return { fired, live: liveCount };
