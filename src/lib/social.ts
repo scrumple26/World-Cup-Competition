@@ -431,12 +431,29 @@ function fallbackGoal(c: GoalTweetContext, matchup: string): TweetOut[] {
   const score = `${c.homeCountry} ${c.runningHome}-${c.runningAway} ${c.awayCountry}`;
   const star = c.nowPerfect[0] ?? c.nowOutcome[0];
   const team = star ?? "GFC Faithful";
-  const og = c.kind === "owngoal" ? " (own goal!)" : c.kind === "penalty" ? " from the spot" : "";
+  const og = c.kind === "owngoal" ? " (OWN GOAL!)" : c.kind === "penalty" ? " from the spot 🎯" : "";
+
+  // Vary the GFC angle so a flurry of goals doesn't read identically.
+  const angle = c.nowPerfect.length
+    ? ` ${c.nowPerfect[0]} is dead-on for a perfect game if it ends here! 👀`
+    : c.nowOutcome.length
+      ? ` ${c.nowOutcome[0]} liking how this is shaping up.`
+      : "";
+
+  // Vary the lead line too, picked deterministically from the goal's facts.
+  const leads = [
+    `⚽ GOAL! ${c.scorer} (${c.scoringCountry})${og} at ${c.minute}'. ${score}.`,
+    `It's in!! ${c.scorer} strikes for ${c.scoringCountry}${og} — ${c.minute}'. ${score}.`,
+    `${c.scoringCountry} score!${og} ${c.scorer} on ${c.minute}'. Now ${score}.`,
+    `BANG. ${c.scorer}${og} makes it ${score} at ${c.minute}'.`,
+  ];
+  const lead = leads[(c.minute + c.runningHome + c.runningAway) % leads.length];
+
   return [{
     fanOf: team,
     handle: slugHandle(team),
     displayName: `${team} Fan`,
-    text: tag(`⚽ GOAL! ${c.scorer} for ${c.scoringCountry}${og} at ${c.minute}' — ${score}.${star ? ` ${star} is loving this scoreline right now!` : ""} #GoalAlert`),
+    text: tag(`${lead}${angle} #GoalAlert`),
     matchup,
   }];
 }
