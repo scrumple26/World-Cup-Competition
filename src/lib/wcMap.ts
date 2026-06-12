@@ -40,11 +40,23 @@ export function toWcMatch(f: ApiFixture): WcMatch {
   };
 }
 
+/**
+ * Canonicalize an API-Football group label to "Group X".
+ * API-Football labels the WC 2026 group tables "Group Stage - Group A" (and
+ * also emits a junk "Group Stage" aggregate ranking table). We want the bare
+ * "Group A" so the row survives the lettered-group filter and maps to doc id A.
+ * Returns "" for anything without a single-letter group (e.g. "Group Stage").
+ */
+export function normalizeGroupLabel(raw: string): string {
+  const m = raw.match(/Group\s+([A-Z])\b/);
+  return m ? `Group ${m[1]}` : "";
+}
+
 /** Map API standings (array of groups) to our group standings shape. */
 export function toGroupStandings(groups: ApiStandingRow[][]): WcGroupStanding[] {
   return groups
     .map((rows) => ({
-      group: rows[0]?.group ?? "",
+      group: normalizeGroupLabel(rows[0]?.group ?? ""),
       rows: rows.map((r) => ({
         rank: r.rank,
         teamId: r.team.id,

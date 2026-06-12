@@ -376,6 +376,39 @@ function roundLabel(round: string): string {
 
 const STAMP_ROTATIONS = [-2, 1.5, -1, 2.5, -1.5, 1, -2.5, 2, -1, 1.5, -2, 1];
 
+/** One country flag earned in the passport, plus every match that earned it. */
+interface CollectedCountry {
+  country: string;
+  flag: string;
+  from: { match: string; round: string }[];
+}
+
+/**
+ * Build the distinct country flags collected from a player's perfect (exact-score)
+ * predictions. Each nailed match yields BOTH countries; repeats are merged so a
+ * country shows once with all the games that earned it.
+ */
+export function collectCountries(
+  predEntries: { p: MatchPrediction; m: import("@/lib/types").WcMatch | undefined }[],
+): CollectedCountry[] {
+  const byCountry = new Map<string, CollectedCountry>();
+  for (const { p, m } of predEntries) {
+    if (!m || m.goals.home === null || m.goals.away === null) continue;
+    if (!["FT", "AET", "PEN"].includes(m.status)) continue;
+    if (p.home !== m.goals.home || p.away !== m.goals.away) continue;
+    const matchLabel = `${m.homeTeamName} ${m.goals.home}–${m.goals.away} ${m.awayTeamName}`;
+    for (const [country, flag] of [
+      [m.homeTeamName, m.homeLogo],
+      [m.awayTeamName, m.awayLogo],
+    ] as const) {
+      const c = byCountry.get(country) ?? { country, flag, from: [] };
+      c.from.push({ match: matchLabel, round: roundLabel(m.round) });
+      byCountry.set(country, c);
+    }
+  }
+  return [...byCountry.values()].sort((a, b) => a.country.localeCompare(b.country));
+}
+
 function Passport({
   predEntries,
   isSelf,
@@ -383,11 +416,7 @@ function Passport({
   predEntries: { p: MatchPrediction; m: import("@/lib/types").WcMatch | undefined }[];
   isSelf: boolean;
 }) {
-  const stamps = predEntries.filter(({ p, m }) => {
-    if (!m || m.goals.home === null || m.goals.away === null) return false;
-    if (!["FT", "AET", "PEN"].includes(m.status)) return false;
-    return p.home === m.goals.home && p.away === m.goals.away;
-  });
+  const countries = collectCountries(predEntries);
 
   return (
     <div
@@ -401,66 +430,73 @@ function Passport({
             Prediction Passport
           </div>
           <div className="mt-0.5 text-xs font-semibold text-emerald-100/60">
-            FIFA World Cup 2026
+            {countries.length > 0
+              ? `${countries.length} ${countries.length === 1 ? "country" : "countries"} stamped`
+              : "FIFA World Cup 2026"}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-2xl">🌍</span>
-          {stamps.length > 0 && (
+          {countries.length > 0 && (
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 text-sm font-bold text-emerald-300">
-              {stamps.length}
+              {countries.length}
             </span>
           )}
         </div>
       </div>
 
-      {/* Stamp grid */}
+      {/* Flag stamp grid — one flag per country, hover to see the match(es) */}
       <div className="px-5 pb-5">
-        {stamps.length === 0 ? (
+        {countries.length === 0 ? (
           <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-emerald-800/60">
             <p className="text-center text-xs text-emerald-700/80">
               {isSelf
-                ? "Predict the exact score of a match to earn your first stamp"
-                : "No perfect predictions yet"}
+                ? "Predict the exact score of a match to stamp your first country"
+                : "No countries stamped yet"}
             </p>
           </div>
         ) : (
           <div className="flex flex-wrap gap-3">
-            {stamps.map(({ p, m }, idx) => !m ? null : (
+            {countries.map((c, idx) => (
               <div
-                key={p.fixtureId}
-                className="relative flex flex-col items-center rounded border-2 border-amber-100/30 bg-amber-50/95 px-3 py-2 shadow-md"
+                key={c.country}
+                className="group relative flex flex-col items-center rounded border-2 border-amber-100/30 bg-amber-50/95 px-3 py-2 shadow-md"
                 style={{
                   transform: `rotate(${STAMP_ROTATIONS[idx % STAMP_ROTATIONS.length]}deg)`,
-                  minWidth: 88,
+                  minWidth: 84,
                 }}
               >
-                {/* Perforated edge effect */}
+                {/* Perforated edges */}
                 <div className="absolute inset-x-0 top-0 flex justify-between px-1">
-                  {Array.from({ length: 8 }).map((_, i) => (
+                  {Array.from({ length: 7 }).map((_, i) => (
                     <span key={i} className="h-1.5 w-1.5 -translate-y-[3px] rounded-full bg-[#0d3320]" />
                   ))}
                 </div>
                 <div className="absolute inset-x-0 bottom-0 flex justify-between px-1">
-                  {Array.from({ length: 8 }).map((_, i) => (
+                  {Array.from({ length: 7 }).map((_, i) => (
                     <span key={i} className="h-1.5 w-1.5 translate-y-[3px] rounded-full bg-[#0d3320]" />
                   ))}
                 </div>
 
-                {/* Flags */}
-                <div className="mt-1 flex items-center gap-1.5">
-                  <img src={m.homeLogo} alt={m.homeTeamName} className="h-7 w-10 rounded-sm object-contain drop-shadow" />
-                  <img src={m.awayLogo} alt={m.awayTeamName} className="h-7 w-10 rounded-sm object-contain drop-shadow" />
-                </div>
+                {/* Flag */}
+                <img src={c.flag} alt={c.country} className="mt-1 h-8 w-12 rounded-sm object-contain drop-shadow" />
+                <div className="mt-1 max-w-[72px] truncate text-[10px] font-bold text-gray-700">{c.country}</div>
+                {c.from.length > 1 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white shadow">
+                    ×{c.from.length}
+                  </span>
+                )}
 
-                {/* Score */}
-                <div className="mt-1 font-mono text-sm font-bold text-gray-800">
-                  {p.home}–{p.away}
-                </div>
-
-                {/* Round label */}
-                <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
-                  {roundLabel(m.round)}
+                {/* Hover tooltip: which game(s) earned this flag */}
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-max max-w-[220px] -translate-x-1/2 rounded-lg bg-[#04140c] px-3 py-2 text-left opacity-0 shadow-xl ring-1 ring-emerald-500/30 transition-opacity group-hover:block group-hover:opacity-100">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-400">
+                    {c.country} — nailed in
+                  </div>
+                  {c.from.map((f, i) => (
+                    <div key={i} className="mt-0.5 text-[11px] text-emerald-50">
+                      {f.match} <span className="text-emerald-400/70">({f.round})</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}

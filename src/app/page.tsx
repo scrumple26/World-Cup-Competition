@@ -12,6 +12,7 @@ import type { WeeklyMessage } from "@/app/api/config/weekly-message/route";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { LiveNow } from "@/components/LiveNow";
 import { SocialFeed } from "@/components/SocialFeed";
+import { PassportLeaderboard } from "@/components/PassportLeaderboard";
 import type { FeedEntry } from "@/lib/feedTypes";
 
 const CARDS = [
@@ -237,6 +238,13 @@ export default function Home() {
 
       {/* Live now */}
       <LiveNow spoilerMode={user?.hideScores} />
+
+      {/* Passport leaderboard — top globetrotters by countries stamped */}
+      <PassportLeaderboard
+        feedEntries={feedEntries}
+        users={league?.users ?? []}
+        currentUid={user?.uid}
+      />
 
       {/* Competition groups */}
       {groupStandings && (

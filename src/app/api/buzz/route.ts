@@ -3,10 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Firestore } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
-import { getLiveFixtures } from "@/lib/apiFootball";
+import { getLiveFixtures, getMatchEvents } from "@/lib/apiFootball";
 import {
-  generatePreMatchTweets, generateHalftimeTweets,
+  generatePreMatchTweets, generateHalftimeTweets, generateGoalTweets,
   type PreMatchPick, type PreMatchTweetContext, type HalftimeTweetContext,
+  type GoalTweetContext,
 } from "@/lib/social";
 import { gatherManagerContext, type ManagerContext, type StrugglingManager } from "@/lib/managerBanter";
 import type { UserProfile, WcMatch, MatchPrediction } from "@/lib/types";
@@ -17,6 +18,9 @@ export const maxDuration = 60;
 const PRE_LOWER_MIN = 15;   // tweet pre-match when kickoff is 15–45 min out
 const PRE_UPPER_MIN = 45;
 const HALF_LOOKBACK_MIN = 150; // matches that kicked off in the last ~2.5h may be at HT now
+const GOAL_LOOKBACK_MIN = 170; // matches that kicked off in the last ~2.8h may still be live
+// API-Football short status codes for an in-progress match.
+const LIVE_STATES = new Set(["1H", "2H", "HT", "ET", "BT", "P", "LIVE"]);
 
 function isoAt(now: number, offsetMin: number): string {
   return new Date(now + offsetMin * 60_000).toISOString();
@@ -184,9 +188,84 @@ async function runHalftime(db: Firestore, users: UserProfile[], now: number, mc:
 }
 
 /**
- * GET /api/buzz — generates pre-match (~30 min out) and half-time fan tweets.
- * Triggered by Vercel Cron (Authorization: Bearer CRON_SECRET); admins may also
- * call it. Idempotent per fixture/phase via the buzzMarkers collection.
+ * Live goal buzz — drip one fan tweet per goal as matches play out.
+ *
+ * Failproof + idempotent: every goal maps to a DETERMINISTIC tweet doc id
+ * `goal_<fixtureId>_<goalIndex>`. We skip any goal whose doc already exists, so
+ * re-running never duplicates and the same scheme lets a later sync backfill any
+ * goal this cron missed (throttled crons, transient API blips). One tweet/goal.
+ */
+async function runGoals(db: Firestore, users: UserProfile[], now: number, mc: ManagerContext) {
+  const snap = await db.collection("wcMatches")
+    .where("kickoff", ">=", isoAt(now, -GOAL_LOOKBACK_MIN))
+    .where("kickoff", "<=", isoAt(now, -1))
+    .get().catch(() => null);
+  if (!snap || snap.empty) return { fired: 0, live: 0 };
+
+  const candidates = snap.docs.map((d) => d.data() as WcMatch).slice(0, 20);
+  const live = await getLiveFixtures(candidates.map((m) => m.id)).catch(() => []);
+  const fxById = new Map(live.map((f) => [f.fixture.id, f]));
+
+  let fired = 0;
+  let liveCount = 0;
+  for (const m of candidates) {
+    const fx = fxById.get(m.id);
+    if (!fx || !LIVE_STATES.has(fx.fixture.status.short)) continue;
+    liveCount++;
+
+    const events = await getMatchEvents(m.id).catch(() => []);
+    const goals = events.filter((e) => e.type === "Goal" && e.detail !== "Missed Penalty");
+    if (goals.length === 0) continue;
+
+    const picks = await gatherPicks(db, users, m.id);
+
+    let runH = 0, runA = 0;
+    for (let i = 0; i < goals.length; i++) {
+      const g = goals[i];
+      const isHomeTeam = g.team.id === m.homeTeamId;
+      const isOwnGoal = g.detail === "Own Goal";
+      // A home own-goal counts for away, and vice-versa.
+      if ((isHomeTeam && !isOwnGoal) || (!isHomeTeam && isOwnGoal)) runH++;
+      else runA++;
+
+      const id = `goal_${m.id}_${i}`;
+      const ref = db.collection("tweets").doc(id);
+      if ((await ref.get().catch(() => null))?.exists) continue; // already tweeted
+
+      const cur = sign(runH - runA);
+      const nowPerfect: string[] = [];
+      const nowOutcome: string[] = [];
+      for (const r of picks) {
+        if (r.home === runH && r.away === runA) nowPerfect.push(r.u.teamName);
+        else if (sign(r.home - r.away) === cur) nowOutcome.push(r.u.teamName);
+      }
+
+      const creditedCountry = (isHomeTeam !== isOwnGoal) ? m.homeTeamName : m.awayTeamName;
+      const ctx: GoalTweetContext = {
+        homeCountry: m.homeTeamName, awayCountry: m.awayTeamName,
+        matchHashtag: hashtagFor(m.homeTeamName, m.awayTeamName),
+        scorer: g.player?.name ?? "Someone",
+        scoringCountry: creditedCountry,
+        minute: g.time.elapsed + (g.time.extra ?? 0),
+        kind: isOwnGoal ? "owngoal" : g.detail.includes("Penalty") ? "penalty" : "goal",
+        runningHome: runH, runningAway: runA,
+        nowPerfect, nowOutcome,
+        managers: mc.managers, strugglers: mc.strugglers,
+      };
+      const tweets = await generateGoalTweets(ctx);
+      if (tweets.length === 0) continue;
+      await ref.set({ id, fixtureId: m.id, createdAt: new Date().toISOString(), ...tweets[0] });
+      fired++;
+    }
+  }
+  return { fired, live: liveCount };
+}
+
+/**
+ * GET /api/buzz — generates pre-match (~30 min out), half-time, and live per-goal
+ * fan tweets. Triggered by Vercel Cron (Authorization: Bearer CRON_SECRET);
+ * admins may also call it. Idempotent per fixture/phase (buzzMarkers) and per
+ * goal (deterministic tweet doc ids).
  */
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -205,6 +284,7 @@ export async function GET(req: NextRequest) {
 
   const pre = await runPreMatch(db, users, now, mc).catch(() => ({ fired: 0, matches: 0 }));
   const half = await runHalftime(db, users, now, mc).catch(() => ({ fired: 0, atHalftime: 0 }));
+  const goals = await runGoals(db, users, now, mc).catch(() => ({ fired: 0, live: 0 }));
 
-  return NextResponse.json({ ok: true, preMatch: pre, halftime: half });
+  return NextResponse.json({ ok: true, preMatch: pre, halftime: half, goals });
 }

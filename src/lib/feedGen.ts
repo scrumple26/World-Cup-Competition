@@ -7,7 +7,7 @@ import { getMatchEvents, getMatchStatistics } from "./apiFootball";
 import { generatePunditCommentary, type StatLeaderLine } from "./commentary";
 import { stakesForRound } from "./wc";
 import { gatherManagerContext, type ManagerContext, type StrugglingManager } from "./managerBanter";
-import { generateTweets, type TweetContext } from "./social";
+import { generateTweets, generateGoalTweets, type TweetContext } from "./social";
 import type { FeedEntry, PerUserMatchResult, FeedLateDrama, MatchScorer } from "./feedTypes";
 
 type ApiEvents = Awaited<ReturnType<typeof getMatchEvents>>;
@@ -76,6 +76,61 @@ function detectLateDrama(
     gainedOutcome,
     ...(varInvolved ? { varInvolved: true } : {}),
   };
+}
+
+const goalSign = (n: number): number => (n > 0 ? 1 : n < 0 ? -1 : 0);
+
+/**
+ * Backfill per-goal tweets for a completed match. Uses the SAME deterministic
+ * doc ids as the live buzz drip (`goal_<fixtureId>_<i>`), so this fills in any
+ * goal the (throttled) live cron missed and never duplicates one it already
+ * posted. Best-effort and idempotent — safe to re-run on every sync.
+ */
+async function backfillGoalTweets(
+  db: Firestore,
+  match: WcMatch,
+  events: ApiEvents,
+  perUser: PerUserMatchResult[],
+  managerCtx: ManagerContext,
+): Promise<void> {
+  const goals = events.filter((e) => e.type === "Goal" && e.detail !== "Missed Penalty");
+  if (goals.length === 0) return;
+
+  let runH = 0, runA = 0;
+  for (let i = 0; i < goals.length; i++) {
+    const g = goals[i];
+    const isHomeTeam = g.team.id === match.homeTeamId;
+    const isOwnGoal = g.detail === "Own Goal";
+    if ((isHomeTeam && !isOwnGoal) || (!isHomeTeam && isOwnGoal)) runH++;
+    else runA++;
+
+    const id = `goal_${match.id}_${i}`;
+    const ref = db.collection("tweets").doc(id);
+    if ((await ref.get().catch(() => null))?.exists) continue;
+
+    const cur = goalSign(runH - runA);
+    const nowPerfect: string[] = [];
+    const nowOutcome: string[] = [];
+    for (const u of perUser) {
+      if (u.predictedHome === runH && u.predictedAway === runA) nowPerfect.push(u.teamName);
+      else if (goalSign(u.predictedHome - u.predictedAway) === cur) nowOutcome.push(u.teamName);
+    }
+
+    const creditedCountry = (isHomeTeam !== isOwnGoal) ? match.homeTeamName : match.awayTeamName;
+    const tweets = await generateGoalTweets({
+      homeCountry: match.homeTeamName, awayCountry: match.awayTeamName,
+      matchHashtag: hashtagFor(match.homeTeamName, match.awayTeamName),
+      scorer: g.player?.name ?? "Someone",
+      scoringCountry: creditedCountry,
+      minute: g.time.elapsed + (g.time.extra ?? 0),
+      kind: isOwnGoal ? "owngoal" : g.detail.includes("Penalty") ? "penalty" : "goal",
+      runningHome: runH, runningAway: runA,
+      nowPerfect, nowOutcome,
+      managers: managerCtx.managers, strugglers: managerCtx.strugglers,
+    });
+    if (tweets.length === 0) continue;
+    await ref.set({ id, fixtureId: match.id, createdAt: new Date().toISOString(), ...tweets[0] });
+  }
 }
 
 function buildScorers(events: ApiEvents, homeTeamId: number): MatchScorer[] {
@@ -328,6 +383,11 @@ export async function generateFeedEntries(
         return db.collection("tweets").doc(id).set({ id, fixtureId: match.id, createdAt: now, ...t });
       }));
     } catch { /* tweets are best-effort */ }
+
+    // Per-goal tweets — backfill any the live drip missed (idempotent doc ids).
+    try {
+      await backfillGoalTweets(db, match, events, perUser, managerCtx);
+    } catch { /* best-effort */ }
     } catch (e) {
       console.error(`[generateFeedEntries] failed for fixture ${match.id}:`, e);
     }

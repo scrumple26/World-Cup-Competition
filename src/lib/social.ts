@@ -358,6 +358,89 @@ function fallbackHalftime(c: HalftimeTweetContext, matchup: string): TweetOut[] 
   return [];
 }
 
+// ── Live goal buzz: a fan reacts to a goal the MOMENT it goes in ───────────────
+
+export interface GoalTweetContext {
+  homeCountry: string;
+  awayCountry: string;
+  matchHashtag: string;
+  scorer: string;            // the player who scored (or whose OG it was)
+  scoringCountry: string;    // the country CREDITED with the goal
+  minute: number;
+  kind: "goal" | "owngoal" | "penalty";
+  runningHome: number;       // score immediately AFTER this goal
+  runningAway: number;
+  /** GFC teams whose FINAL predicted score now equals the running score. */
+  nowPerfect: string[];
+  /** GFC teams whose predicted RESULT matches the current running result. */
+  nowOutcome: string[];
+  managers?: Record<string, string>;
+  strugglers?: StrugglingManager[];
+}
+
+/**
+ * One fan tweet reacting to a single goal as it happens. Designed to be fired
+ * live (drip) by the buzz cron, one tweet per goal. Falls back to a template
+ * without a Gemini key so a goal NEVER goes untweeted.
+ */
+export async function generateGoalTweets(c: GoalTweetContext): Promise<TweetOut[]> {
+  const matchup = `${c.homeCountry} vs ${c.awayCountry}`;
+  const involved = [...c.nowPerfect, ...c.nowOutcome];
+  const ml = managerLines(involved, c.managers, c.strugglers);
+
+  const goalDesc =
+    c.kind === "owngoal"
+      ? `${c.scorer} scores an OWN GOAL, credited to ${c.scoringCountry}`
+      : c.kind === "penalty"
+        ? `${c.scorer} converts a PENALTY for ${c.scoringCountry}`
+        : `${c.scorer} scores for ${c.scoringCountry}`;
+  const f: string[] = [
+    `GOAL at ${c.minute}': ${goalDesc}.`,
+    `Running score now: ${c.homeCountry} ${c.runningHome}-${c.runningAway} ${c.awayCountry} (match still in play).`,
+  ];
+  if (c.nowPerfect.length) f.push(`If it ENDS on this score, these GFC teams land a PERFECT game: ${c.nowPerfect.join(", ")}.`);
+  if (c.nowOutcome.length) f.push(`These GFC teams currently have the right RESULT: ${c.nowOutcome.join(", ")}.`);
+
+  const teams = involved.length ? involved : ["a Global Football Cup contender"];
+  const prompt = `You are generating a single playful fan post ("tweet") for the Global Football Cup — a 17-player World Cup 2026 prediction game where each player has a team name and earns points predicting real match scores (an exact score is a "perfect game").
+
+A goal has JUST been scored in a LIVE real World Cup match. A fan of one Global Football Cup team is reacting in real time, through the lens of the prediction race.
+
+FACTS (use ONLY these — never invent players, scores, teams, or standings):
+${f.join("\n")}${ml.facts ? "\n" + ml.facts : ""}
+
+Global Football Cup teams you may write as a fan of: ${teams.join(", ")}.
+
+Write 1 short tweet. Return: fanOf (one of the GFC teams above), handle (a fun @handle referencing that team), displayName (a fun fan name), and text.
+Rules:
+- Excited, in-the-moment fan energy reacting to the goal RIGHT NOW. 1-2 sentences. It's LIVE — do not invent a final result; the game is ongoing.
+- Tie the goal to a GFC angle when one exists (a team now on track for a perfect game, a team whose call this goal just helped or hurt), otherwise just react to the goal itself.
+- You MAY chirp another Global Football Cup team named above.
+${ml.instruction}
+- MUST end with hashtags including "${c.matchHashtag}" and "${REQUIRED_TAG}", plus 1 fun made-up hashtag.
+- No markdown.`;
+
+  const parsed = await callTweetModel(prompt);
+  if (!parsed || parsed.length === 0) return fallbackGoal(c, matchup);
+  const mapped = mapRaw(parsed, c.matchHashtag, matchup, 1);
+  return mapped.length ? mapped : fallbackGoal(c, matchup);
+}
+
+function fallbackGoal(c: GoalTweetContext, matchup: string): TweetOut[] {
+  const tag = (s: string) => enforceHashtags(s, c.matchHashtag);
+  const score = `${c.homeCountry} ${c.runningHome}-${c.runningAway} ${c.awayCountry}`;
+  const star = c.nowPerfect[0] ?? c.nowOutcome[0];
+  const team = star ?? "GFC Faithful";
+  const og = c.kind === "owngoal" ? " (own goal!)" : c.kind === "penalty" ? " from the spot" : "";
+  return [{
+    fanOf: team,
+    handle: slugHandle(team),
+    displayName: `${team} Fan`,
+    text: tag(`⚽ GOAL! ${c.scorer} for ${c.scoringCountry}${og} at ${c.minute}' — ${score}.${star ? ` ${star} is loving this scoreline right now!` : ""} #GoalAlert`),
+    matchup,
+  }];
+}
+
 function fallbackTweets(c: TweetContext, matchup: string): Omit<FauxTweet, "id" | "fixtureId" | "createdAt">[] {
   const out: Omit<FauxTweet, "id" | "fixtureId" | "createdAt">[] = [];
   const tag = (s: string) => enforceHashtags(s, c.matchHashtag);
