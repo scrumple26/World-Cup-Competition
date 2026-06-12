@@ -211,7 +211,11 @@ export function fallbackCommentary(ctx: CommentaryContext): PunditLine[] {
   const margin = Math.abs(homeScore - awayScore);
   const shots = ctx.statLeaders.find((s) => s.label.toLowerCase().includes("shot"));
   const cleanSheetForWinner = !!winner && (winner === homeTeam ? awayScore === 0 : homeScore === 0);
-  const topScorer = ctx.scorers[0];
+  // The decisive goal: the WINNER's last goal (the one that sealed it), or the
+  // last goal of the match in a draw — never an early goal by the losing side.
+  const decisive = winner
+    ? [...ctx.scorers].reverse().find((s) => (s.side === "home" ? homeTeam : awayTeam) === winner)
+    : ctx.scorers[ctx.scorers.length - 1];
   const lines: PunditLine[] = [];
 
   // 1 — Donovan sets the scene (real match only).
@@ -232,11 +236,12 @@ export function fallbackCommentary(ctx: CommentaryContext): PunditLine[] {
     ? `And don't sleep on that clean sheet — ${winner} defended for their lives when they had to. That's the unglamorous stuff that wins tournaments, Clint, not just you forwards nicking the headlines.`
     : `Both back lines had moments to forget out there. You can't gift goals like that at a World Cup — somebody's keeper is replaying that one on the flight home.` });
 
-  // 4 — Donovan on the standout scorer.
-  if (topScorer) {
-    const team = topScorer.side === "home" ? homeTeam : awayTeam;
-    const how = topScorer.kind === "penalty" ? "from the spot " : topScorer.kind === "owngoal" ? "with a cruel own goal " : "";
-    lines.push({ speaker: "donovan", text: `${topScorer.player} ${how}in the ${topScorer.minute}' was the moment that decided it for ${team}. Composure when it mattered — that's a player who'll remember this one for a long time.` });
+  // 4 — Donovan on the decisive goal.
+  if (decisive) {
+    const how = decisive.kind === "penalty" ? "from the spot " : decisive.kind === "owngoal" ? "with a cruel own goal " : "";
+    lines.push({ speaker: "donovan", text: winner
+      ? `${decisive.player} ${how}in the ${decisive.minute}' was the goal that sealed it for ${winner}. Composure when it mattered — that's a player who'll remember this one for a long time.`
+      : `${decisive.player} ${how}had the final say in the ${decisive.minute}', but these two simply couldn't be separated. Sometimes a point apiece is the fair result.` });
   } else {
     lines.push({ speaker: "donovan", text: `No single hero today, just a team that stuck to the plan from the first whistle to the last. Sometimes that's the whole story.` });
   }
