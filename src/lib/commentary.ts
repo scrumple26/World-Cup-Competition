@@ -200,37 +200,67 @@ export async function generatePunditCommentary(ctx: CommentaryContext): Promise<
   }
 }
 
-/** Deterministic dialogue used when AI is unavailable. */
+/**
+ * Deterministic dialogue used when AI is unavailable. Mirrors the AI brief: a
+ * 6-line desk segment with DISTINCT voices, the real-match story tied to the
+ * Global Football Cup race, and the odd bit of banter / war-story seasoning.
+ */
 export function fallbackCommentary(ctx: CommentaryContext): PunditLine[] {
-  const winner = ctx.homeScore > ctx.awayScore ? ctx.homeTeam
-    : ctx.awayScore > ctx.homeScore ? ctx.awayTeam : null;
-  const lines: PunditLine[] = [];
-  lines.push({
-    speaker: "donovan",
-    text: winner
-      ? `${winner} take it, ${ctx.homeTeam} ${ctx.homeScore}–${ctx.awayScore} ${ctx.awayTeam}.`
-      : `Honors even, ${ctx.homeScore}–${ctx.awayScore} between ${ctx.homeTeam} and ${ctx.awayTeam}.`,
-  });
+  const { homeTeam, awayTeam, homeScore, awayScore } = ctx;
+  const winner = homeScore > awayScore ? homeTeam : awayScore > homeScore ? awayTeam : null;
+  const margin = Math.abs(homeScore - awayScore);
   const shots = ctx.statLeaders.find((s) => s.label.toLowerCase().includes("shot"));
+  const cleanSheetForWinner = !!winner && (winner === homeTeam ? awayScore === 0 : homeScore === 0);
+  const topScorer = ctx.scorers[0];
+  const lines: PunditLine[] = [];
+
+  // 1 — Donovan sets the scene (real match only).
+  lines.push({ speaker: "donovan", text: winner
+    ? `Full time, and ${winner} get it done — ${homeTeam} ${homeScore}–${awayScore} ${awayTeam}. ${margin >= 2 ? "Comfortable in the end." : "But they had to grind for it."}`
+    : `Honors even at the whistle — ${homeTeam} ${homeScore}–${awayScore} ${awayTeam}. Two sides that cancelled each other out.` });
+
+  // 2 — Dempsey on the attacking / shots story, with swagger.
   if (shots && shots.leader !== "even") {
-    const who = shots.leader === "home" ? ctx.homeTeam : ctx.awayTeam;
-    lines.push({ speaker: "dempsey", text: `${who} earned it — ${shots.home}-${shots.away} on shots. You make the chances count, you win games.` });
+    const who = shots.leader === "home" ? homeTeam : awayTeam;
+    lines.push({ speaker: "dempsey", text: `Look at the shot count, Landon — ${shots.home}-${shots.away}. ${who} kept knocking on the door, and you do that long enough, it pays. You make your chances count, you win games. Simple as that.` });
   } else {
-    lines.push({ speaker: "dempsey", text: `Tight one, Landon. Not much in it on the numbers.` });
+    lines.push({ speaker: "dempsey", text: `Not much in it on the numbers, Landon, but the side that wanted it more found a way. That's the difference at this level — a bit of nerve in front of goal.` });
   }
-  if (ctx.lateDrama) {
+
+  // 3 — Howard on defending / keeping, chirping the strikers.
+  lines.push({ speaker: "howard", text: cleanSheetForWinner
+    ? `And don't sleep on that clean sheet — ${winner} defended for their lives when they had to. That's the unglamorous stuff that wins tournaments, Clint, not just you forwards nicking the headlines.`
+    : `Both back lines had moments to forget out there. You can't gift goals like that at a World Cup — somebody's keeper is replaying that one on the flight home.` });
+
+  // 4 — Donovan on the standout scorer.
+  if (topScorer) {
+    const team = topScorer.side === "home" ? homeTeam : awayTeam;
+    const how = topScorer.kind === "penalty" ? "from the spot " : topScorer.kind === "owngoal" ? "with a cruel own goal " : "";
+    lines.push({ speaker: "donovan", text: `${topScorer.player} ${how}in the ${topScorer.minute}' was the moment that decided it for ${team}. Composure when it mattered — that's a player who'll remember this one for a long time.` });
+  } else {
+    lines.push({ speaker: "donovan", text: `No single hero today, just a team that stuck to the plan from the first whistle to the last. Sometimes that's the whole story.` });
+  }
+
+  // 5 — The Global Football Cup angle: perfect picks made/broken.
+  if (ctx.lateDrama && (ctx.lateDrama.lostPerfect.length || ctx.lateDrama.gainedPerfect.length)) {
     const d = ctx.lateDrama;
-    const broke = d.lostPerfect[0] ?? d.lostOutcome[0];
-    const made = d.gainedPerfect[0] ?? d.gainedOutcome[0];
-    if (broke) lines.push({ speaker: "howard", text: `Brutal — ${d.scoringTeam}'s ${d.elapsed}' goal${d.varInvolved ? ", and VAR waved it through," : ""} ripped a perfect pick away from ${broke}.` });
-    else if (made) lines.push({ speaker: "howard", text: `That ${d.elapsed}' strike${d.varInvolved ? " — VAR confirmed —" : ""} just handed ${made} a perfect pick. Unreal timing.` });
+    const broke = d.lostPerfect[0]; const made = d.gainedPerfect[0];
+    lines.push({ speaker: "howard", text: broke
+      ? `And oh, the Global Football Cup heartbreak — ${d.scoringTeam}'s ${d.elapsed}' goal${d.varInvolved ? ", VAR and all," : ""} ripped a perfect game right out of ${broke}'s hands. Brutal way to drop points.`
+      : `Talk about timing — ${d.scoringTeam}'s ${d.elapsed}' strike${d.varInvolved ? " (after VAR)" : ""} just gifted ${made} a perfect game in the Global Football Cup. You take that all day.` });
+  } else if (ctx.perfectPickers.length) {
+    lines.push({ speaker: "howard", text: `Over in the Global Football Cup, full marks to ${ctx.perfectPickers.slice(0, 3).join(", ")} — called it ${homeScore}–${awayScore} on the nose. That's the maximum, and that's how you climb a table.` });
+  } else {
+    lines.push({ speaker: "howard", text: `Tough night for the Global Football Cup crowd — not many saw this scoreline coming, and the points reflect it. Back to the drawing board for the next round of picks.` });
   }
-  if (ctx.scorers[0]) {
-    const s = ctx.scorers[0];
-    lines.push({ speaker: "donovan", text: `${s.player} with the moment in the ${s.minute}' — that's the difference today.` });
-  }
-  if (ctx.perfectPickers.length) {
-    lines.push({ speaker: "howard", text: `And full marks to ${ctx.perfectPickers.slice(0, 3).join(", ")} — called it on the nose.` });
-  }
-  return lines;
+
+  // 6 — Dempsey wraps with stakes + a war story / banter.
+  const stakes = ctx.stakes === "knockout"
+    ? "Win or go home, and someone's tournament just ended right there"
+    : ctx.stakes === "qualifier"
+      ? "A place in the next round was riding on this one"
+      : "Early days in the group, but every single point counts";
+  lines.push({ speaker: "dempsey", text: `${stakes}. Takes me back to my World Cup days, Tim — these are the nights you live for. ${winner ? `${winner} march on, ` : ""}and that Global Football Cup table just got a little more interesting.` });
+
+  return lines.slice(0, 6);
 }

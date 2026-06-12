@@ -74,8 +74,11 @@ export function PunditDesk({ lines, match }: { lines: PunditLine[]; match?: Pund
           ))}
         </div>
         <div className="min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">
+            Postgame Pundit Recap
+          </div>
           <div className="truncate text-base font-bold leading-tight">
-            {match ? `Pundit Recap: ${match.homeTeam} vs ${match.awayTeam}` : "The Pundit Desk"}
+            {match ? `${match.homeTeam} vs ${match.awayTeam}` : "The Pundit Desk"}
           </div>
           <div className="text-[11px] text-[var(--muted)]">Dempsey · Howard · Donovan break it down</div>
         </div>

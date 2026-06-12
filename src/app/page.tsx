@@ -71,6 +71,16 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  // Whether the current user has locked in their bracket (to nudge only if not).
+  const [userLocked, setUserLocked] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!user?.uid) return;
+    fetch(`/api/predictions?uid=${user.uid}&summary=1`)
+      .then(r => r.json())
+      .then(d => setUserLocked(!!d.userLocked))
+      .catch(() => {});
+  }, [user?.uid]);
+
   // Player of the Week — most points since Monday
   const potw = useMemo(() => {
     if (!league?.users.length) return null;
@@ -167,18 +177,19 @@ export default function Home() {
       <div className="card p-5 lg:col-span-2">
         <h1 className="text-2xl font-bold">Welcome back, {user?.teamName} 👋</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Group <b>{user?.friendGroup}</b> · Lock in your predictions before each kickoff.
+          Group <b>{user?.friendGroup}</b>
+          {userLocked === false && " · Lock in your predictions before each kickoff."}
         </p>
 
         {/* Player of the Week + Biggest Jump + Hot Hand */}
         {(potw || bigJump || hotHand) && (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {potw && (
-              <div className="flex items-center gap-3 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 px-4 py-3">
+              <div className="flex items-center gap-3 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 px-3 py-2">
                 {potw.user.logoUrl ? (
-                  <img src={potw.user.logoUrl} alt="" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                  <img src={potw.user.logoUrl} alt="" className="h-7 w-7 rounded-full object-cover flex-shrink-0" />
                 ) : (
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg-elev)] text-xs font-bold text-[var(--muted)] flex-shrink-0">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-elev)] text-[10px] font-bold text-[var(--muted)] flex-shrink-0">
                     {potw.user.teamName.charAt(0)}
                   </span>
                 )}
@@ -193,11 +204,11 @@ export default function Home() {
               </div>
             )}
             {bigJump && (
-              <div className="flex items-center gap-3 rounded-xl border border-[var(--accent-2)]/30 bg-[var(--accent-2)]/5 px-4 py-3">
+              <div className="flex items-center gap-3 rounded-xl border border-[var(--accent-2)]/30 bg-[var(--accent-2)]/5 px-3 py-2">
                 {bigJump.user.logoUrl ? (
-                  <img src={bigJump.user.logoUrl} alt="" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                  <img src={bigJump.user.logoUrl} alt="" className="h-7 w-7 rounded-full object-cover flex-shrink-0" />
                 ) : (
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg-elev)] text-xs font-bold text-[var(--muted)] flex-shrink-0">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-elev)] text-[10px] font-bold text-[var(--muted)] flex-shrink-0">
                     {bigJump.user.teamName.charAt(0)}
                   </span>
                 )}
@@ -212,11 +223,11 @@ export default function Home() {
               </div>
             )}
             {hotHand && (
-              <div className="flex items-center gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-3">
+              <div className="flex items-center gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 px-3 py-2">
                 {hotHand.user.logoUrl ? (
-                  <img src={hotHand.user.logoUrl} alt="" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                  <img src={hotHand.user.logoUrl} alt="" className="h-7 w-7 rounded-full object-cover flex-shrink-0" />
                 ) : (
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg-elev)] text-xs font-bold text-[var(--muted)] flex-shrink-0">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-elev)] text-[10px] font-bold text-[var(--muted)] flex-shrink-0">
                     {hotHand.user.teamName.charAt(0)}
                   </span>
                 )}
@@ -233,18 +244,11 @@ export default function Home() {
           </div>
         )}
       </div>
-      <SocialFeed compact limit={6} />
+      <SocialFeed compact limit={3} />
       </div>
 
       {/* Live now */}
       <LiveNow spoilerMode={user?.hideScores} />
-
-      {/* Passport leaderboard — top globetrotters by countries stamped */}
-      <PassportLeaderboard
-        feedEntries={feedEntries}
-        users={league?.users ?? []}
-        currentUid={user?.uid}
-      />
 
       {/* Competition groups */}
       {groupStandings && (
@@ -343,6 +347,13 @@ export default function Home() {
           )}
         </div>
       )}
+
+      {/* Passport leaderboard — top globetrotters by countries stamped */}
+      <PassportLeaderboard
+        feedEntries={feedEntries}
+        users={league?.users ?? []}
+        currentUid={user?.uid}
+      />
 
       {/* Activity feed */}
       <div>

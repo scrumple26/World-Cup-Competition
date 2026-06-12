@@ -51,6 +51,7 @@ export function SocialFeed({
 }) {
   const [tweets, setTweets] = useState<FauxTweet[]>(tweetsProp ?? []);
   const [loading, setLoading] = useState(!tweetsProp);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (tweetsProp) { setTweets(tweetsProp); setLoading(false); return; }
@@ -61,14 +62,28 @@ export function SocialFeed({
       .finally(() => setLoading(false));
   }, [tweetsProp]);
 
-  const shown = limit ? tweets.slice(0, limit) : tweets;
+  // When a limit is set, show only that many until the user expands.
+  const collapsedCount = limit ?? tweets.length;
+  const shown = expanded ? tweets : tweets.slice(0, collapsedCount);
+  const hiddenCount = tweets.length - shown.length;
 
   const body = loading ? (
     <p className="px-3 py-4 text-sm text-[var(--muted)]">Loading buzz…</p>
   ) : shown.length === 0 ? (
     <p className="px-3 py-4 text-sm text-[var(--muted)]">No buzz yet — fan reactions post as goals and results roll in.</p>
   ) : (
-    shown.map((t) => <TweetCard key={t.id} t={t} />)
+    <>
+      {shown.map((t) => <TweetCard key={t.id} t={t} />)}
+      {(hiddenCount > 0 || expanded) && limit != null && tweets.length > limit && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="w-full border-t border-[var(--border)] px-3 py-2 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--bg-elev)]"
+        >
+          {expanded ? "Show less" : `Show ${hiddenCount} more`}
+        </button>
+      )}
+    </>
   );
 
   if (compact) {
