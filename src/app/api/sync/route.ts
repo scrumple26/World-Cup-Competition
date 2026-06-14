@@ -25,6 +25,12 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // Light mode (cron: ?light=1): refresh results + recompute scores only, and
+  // SKIP Gemini feed generation. Runs frequently so scores/standings/charts
+  // track live games and finished matches promptly, without re-hammering the
+  // AI feed step. The full sync (with feed) runs on a slower cadence.
+  const light = req.nextUrl.searchParams.get("light") === "1";
+
   const db = getAdminDb();
   if (!db) {
     return NextResponse.json(
@@ -113,29 +119,32 @@ async function handle(req: NextRequest) {
     //    Non-critical: never let this block or fail the sync.
     const playedStatuses = new Set(["FT", "AET", "PEN"]);
     let feedCount = 0;
-    try {
-      const [usersSnap, feedSnap] = await Promise.all([
-        db.collection("users").get(),
-        db.collection("feedEntries").get(),
-      ]);
-      const completeFeedIds = new Set(
-        feedSnap.docs
-          .filter((d) => {
-            const e = d.data() as { commentary?: unknown[] };
-            return Array.isArray(e.commentary) && e.commentary.length > 0;
-          })
-          .map((d) => d.id),
-      );
-      const needsFeed = wcMatches.filter(
-        (m) => playedStatuses.has(m.status) && !completeFeedIds.has(String(m.id)),
-      );
-      feedCount = await generateFeedEntries(db, needsFeed, usersSnap);
-    } catch (e) {
-      console.error("[sync] feed generation failed (scores still updated):", e);
+    if (!light) {
+      try {
+        const [usersSnap, feedSnap] = await Promise.all([
+          db.collection("users").get(),
+          db.collection("feedEntries").get(),
+        ]);
+        const completeFeedIds = new Set(
+          feedSnap.docs
+            .filter((d) => {
+              const e = d.data() as { commentary?: unknown[] };
+              return Array.isArray(e.commentary) && e.commentary.length > 0;
+            })
+            .map((d) => d.id),
+        );
+        const needsFeed = wcMatches.filter(
+          (m) => playedStatuses.has(m.status) && !completeFeedIds.has(String(m.id)),
+        );
+        feedCount = await generateFeedEntries(db, needsFeed, usersSnap);
+      } catch (e) {
+        console.error("[sync] feed generation failed (scores still updated):", e);
+      }
     }
 
     return NextResponse.json({
       ok: true,
+      light,
       matchesSynced: matchWrites,
       groupsSynced: standings.length,
       autoFilled,
