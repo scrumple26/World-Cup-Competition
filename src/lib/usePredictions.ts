@@ -78,8 +78,10 @@ export function usePredictions(
   const [isUserLocked, setIsUserLocked] = useState(false);
   const [isKnockoutUnlocked, setIsKnockoutUnlocked] = useState(false);
   const [locking,    setLocking]    = useState(false);
+  const [lockingKnockout, setLockingKnockout] = useState(false);
   const [loaded,     setLoaded]     = useState(false);
   const [lockError,  setLockError]  = useState<string | null>(null);
+  const [lockKnockoutError, setLockKnockoutError] = useState<string | null>(null);
 
   // ---- deadline enforcement ----
 
@@ -349,6 +351,38 @@ export function usePredictions(
     }
   }, [uid, matches, locking, isUserLocked]);
 
+  // ---- lockInKnockout — saves knockout picks and re-locks the knockout stage ----
+
+  const lockInKnockout = useCallback(async () => {
+    if (!uid || lockingKnockout || !isKnockoutUnlocked) return;
+    setLockingKnockout(true);
+    setLockKnockoutError(null);
+    try {
+      const { getClientAuth } = await import("./firebase/client");
+      const auth = getClientAuth();
+      if (!auth) throw new Error("Firebase not configured");
+      try { await auth.authStateReady(); } catch { /* */ }
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Not signed in — please refresh and try again.");
+
+      const res = await fetch("/api/lock-in-knockout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ predictions: Object.values(matches) }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(error ?? "Knockout lock-in failed");
+      }
+      setIsKnockoutUnlocked(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Knockout lock-in failed";
+      setLockKnockoutError(msg);
+    } finally {
+      setLockingKnockout(false);
+    }
+  }, [uid, matches, lockingKnockout, isKnockoutUnlocked]);
+
   // No auto-lock at the deadline: locking in is an explicit, all-at-once action.
   // The deadline is a hard lockout (enforced server-side too) — anyone who has
   // not locked in by then scores 0. Past the deadline the UI is read-only via
@@ -391,12 +425,15 @@ export function usePredictions(
     overrideThirdPlace,
     resetThirdPlaceOverride,
     lockIn,
+    lockInKnockout,
     isUserLocked,
     isKnockoutUnlocked,
     isPastDeadline,
     isLocked,
     locking,
+    lockingKnockout,
     lockError,
+    lockKnockoutError,
     pendingCount,
   };
 }

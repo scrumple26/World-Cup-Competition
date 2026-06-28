@@ -131,11 +131,14 @@ export function PredictionsClient({
     overrideThirdPlace,
     resetThirdPlaceOverride,
     lockIn,
+    lockInKnockout,
     isUserLocked,
     isKnockoutUnlocked,
     isLocked,
     locking,
+    lockingKnockout,
     lockError,
+    lockKnockoutError,
     pendingCount,
   } = usePredictions(targetUid, groups, deadline, !actAs);
 
@@ -239,12 +242,32 @@ export function PredictionsClient({
       </div>
 
       {stage === "knockout" ? (
-        <KnockoutPredictions
-          matches={matches}
-          saveStates={saveStates}
-          onMatchChange={(fixtureId, home, away, predictedWinner) =>
-            setMatch(fixtureId, home, away, predictedWinner, true)}
-        />
+        <>
+          <KnockoutPredictions
+            matches={matches}
+            saveStates={saveStates}
+            onMatchChange={(fixtureId, home, away, predictedWinner) =>
+              setMatch(fixtureId, home, away, predictedWinner, true)}
+          />
+          {isKnockoutUnlocked && !isAdmin && (
+            <div className="card p-5 space-y-3">
+              <div className="font-semibold">Lock in knockout picks</div>
+              <p className="text-sm text-[var(--muted)]">
+                Your group picks are locked in. Enter your knockout predictions above, then lock them in when you&apos;re ready.
+              </p>
+              {lockKnockoutError && (
+                <p className="text-sm text-red-400">{lockKnockoutError}</p>
+              )}
+              <button
+                onClick={lockInKnockout}
+                disabled={lockingKnockout}
+                className="btn-primary px-6"
+              >
+                {lockingKnockout ? "Locking in…" : "🔒 Lock In Knockout Picks"}
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
