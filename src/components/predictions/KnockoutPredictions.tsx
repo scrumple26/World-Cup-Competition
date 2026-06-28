@@ -6,7 +6,6 @@ import { FRIEND_STAGE_WC_ROUNDS } from "@/lib/wc";
 import { isLocked } from "@/lib/wcMap";
 import type { MatchPrediction, Outcome, WcMatch } from "@/lib/types";
 import { MatchPredictionCard, type SaveState } from "./MatchPredictionCard";
-import type { useKnockoutPredictions } from "@/lib/useKnockoutPredictions";
 
 const FRIEND_ROUNDS: { key: "ko1" | "ko2" | "kofinal"; title: string; blurb: string }[] = [
   {
