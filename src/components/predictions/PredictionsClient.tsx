@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useWcData } from "@/lib/useWcData";
 import { usePredictions } from "@/lib/usePredictions";
+import { useKnockoutPredictions } from "@/lib/useKnockoutPredictions";
 import { GroupSection } from "./GroupSection";
 import { ThirdPlaceSelector } from "./ThirdPlaceSelector";
 import { FlashcardMode } from "./FlashcardMode";
@@ -138,6 +139,21 @@ export function PredictionsClient({
     pendingCount,
   } = usePredictions(targetUid, groups, deadline, !actAs);
 
+  // Knockout predictions hook
+  const {
+    loaded: koLoaded,
+    matches: koMatches,
+    lockedMatches,
+    saveStates: koSaveStates,
+    setMatch: setKoMatch,
+    lockGame,
+    lockAllGames,
+    isUserLocked: koIsUserLocked,
+    locking: koLocking,
+    lockError: koLockError,
+    pendingCount: koPendingCount,
+  } = useKnockoutPredictions(targetUid, !actAs);
+
   // Compute the best 8 third-place teams from predicted match scores
   const autoThirdPlace = useMemo(() => {
     if (!groups.length || !loaded) return [];
@@ -173,7 +189,7 @@ export function PredictionsClient({
     try { sessionStorage.setItem("pred-stage", s); } catch { /* non-fatal */ }
   }
 
-  if (loading || !loaded) {
+  if (loading || !loaded || !koLoaded) {
     return <p className="text-[var(--muted)]">Loading World Cup fixtures…</p>;
   }
   if (error) {
@@ -237,9 +253,16 @@ export function PredictionsClient({
 
       {stage === "knockout" ? (
         <KnockoutPredictions
-          matches={matches}
-          saveStates={saveStates}
-          onMatchChange={setMatch}
+          matches={koMatches}
+          lockedMatches={lockedMatches}
+          saveStates={koSaveStates}
+          onMatchChange={setKoMatch}
+          onLockGame={lockGame}
+          onLockAll={lockAllGames}
+          isUserLocked={koIsUserLocked}
+          locking={koLocking}
+          lockError={koLockError}
+          pendingCount={koPendingCount}
         />
       ) : (
         <>
