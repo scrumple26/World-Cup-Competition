@@ -26,6 +26,7 @@ export function AdminClient() {
   const [predCounts, setPredCounts] = useState<Record<string, number>>({});
   const [lockStatus, setLockStatus] = useState<Record<string, boolean>>({});
   const [unlockingUid, setUnlockingUid] = useState<string | null>(null);
+  const [unlockingAll, setUnlockingAll] = useState(false);
   const [reminderBusy, setReminderBusy] = useState<string | null>(null);
   const [reminderNote, setReminderNote] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<ReminderStatus | null>(null);
@@ -193,6 +194,40 @@ export function AdminClient() {
       }
     } finally {
       setUnlockingUid(null);
+    }
+  }
+
+  async function handleUnlockAll() {
+    if (!league) return;
+    const lockedUsers = league.users.filter((u) => lockStatus[u.uid]);
+    if (lockedUsers.length === 0) {
+      flash("Everyone is already unlocked.");
+      return;
+    }
+    if (!window.confirm(`Unlock all ${lockedUsers.length} locked player(s)? Their current picks will be kept.`)) return;
+    setUnlockingAll(true);
+    try {
+      const unlocked: string[] = [];
+      let failed = 0;
+      for (const u of lockedUsers) {
+        const r = await unlockUser(u.uid);
+        if (r.ok) unlocked.push(u.uid);
+        else failed++;
+      }
+      if (unlocked.length) {
+        setLockStatus((prev) => {
+          const next = { ...prev };
+          for (const uid of unlocked) next[uid] = false;
+          return next;
+        });
+      }
+      if (failed === 0) {
+        flash(`✓ Unlocked ${unlocked.length} player(s)`);
+      } else {
+        flash(`Unlocked ${unlocked.length} player(s), ${failed} failed`);
+      }
+    } finally {
+      setUnlockingAll(false);
     }
   }
 
@@ -542,6 +577,15 @@ export function AdminClient() {
           player to let them edit and re-submit — their current picks are kept. (Only works before the
           first match kicks off; after that the deadline locks everyone.)
         </p>
+        <div className="mb-3 flex justify-end">
+          <button
+            className="btn-ghost text-xs"
+            onClick={handleUnlockAll}
+            disabled={unlockingAll}
+          >
+            {unlockingAll ? "Unlocking all…" : "🔓 Unlock all locked players"}
+          </button>
+        </div>
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
           <table className="w-full text-sm">
             <thead className="bg-[var(--bg-elev)] text-xs uppercase text-[var(--muted)]">
@@ -575,7 +619,7 @@ export function AdminClient() {
                         {locked ? (
                           <button
                             onClick={() => handleUnlock(u.uid, u.teamName)}
-                            disabled={unlockingUid === u.uid}
+                            disabled={unlockingAll || unlockingUid === u.uid}
                             className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
                             title="Unlock so this player can edit and re-submit"
                           >
