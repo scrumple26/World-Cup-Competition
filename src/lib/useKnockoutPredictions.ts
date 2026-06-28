@@ -17,6 +17,7 @@ type SerializedKnockoutDraft = {
   lockedMatches?: number[];
   updatedAt?: number;
 };
+const DRAFT_SYNC_DEBOUNCE_MS = 1000;
 
 function lsKey(uid: string) {
   return `ko_predictions_${uid}`;
@@ -66,6 +67,7 @@ async function postKnockoutDraft(store: KnockoutPendingStore) {
     } catch { /* non-fatal */ }
     const token = await auth.currentUser?.getIdToken();
     if (!token) return;
+    const updatedAt = store.updatedAt ?? Date.now();
     await fetch("/api/predictions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -74,7 +76,7 @@ async function postKnockoutDraft(store: KnockoutPendingStore) {
         payload: {
           matches: store.matches,
           lockedMatches: Array.from(store.lockedMatches),
-          updatedAt: Date.now(),
+          updatedAt,
         },
       }),
     });
@@ -156,7 +158,7 @@ export function useKnockoutPredictions(
       })
       .catch(() => {
         if (!active) return;
-        const pending = loadKnockoutPending(uid ?? "");
+        const pending = loadKnockoutPending(uid);
         setMatchesState(pending.matches);
         setLockedMatchesState(pending.lockedMatches);
         setLoaded(true);
@@ -275,28 +277,20 @@ export function useKnockoutPredictions(
     const store: KnockoutPendingStore = {
       matches,
       lockedMatches,
+      updatedAt: Date.now(),
     };
 
     const t = setTimeout(() => {
       void postKnockoutDraft(store);
-    }, 1000);
+    }, DRAFT_SYNC_DEBOUNCE_MS);
 
     return () => clearTimeout(t);
   }, [syncDrafts, uid, loaded, isUserLocked, matches, lockedMatches]);
 
   const pendingCount = useMemo(() => {
     if (!uid || isUserLocked) return 0;
-    try {
-      const raw = localStorage.getItem(lsKey(uid));
-      if (!raw) return 0;
-      const p = JSON.parse(raw) as Omit<KnockoutPendingStore, "lockedMatches"> & {
-        lockedMatches?: number[];
-      };
-      return Object.keys(p.matches ?? {}).length;
-    } catch {
-      return 0;
-    }
-  }, [uid, isUserLocked]);
+    return Object.keys(matches).length;
+  }, [uid, isUserLocked, matches]);
 
   return {
     loaded,

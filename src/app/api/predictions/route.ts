@@ -15,7 +15,7 @@ function toMatchRecord(predictions: MatchPrediction[]): Record<number, MatchPred
 
 type UserKnockoutData = {
   knockoutLocked?: boolean;
-  knockoutMatches?: Record<string, MatchPrediction>;
+  knockoutMatches?: Record<number, MatchPrediction>;
   knockoutDraft?: object | null;
 };
 /**
