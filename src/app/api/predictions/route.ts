@@ -36,12 +36,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const [mSnap, gSnap, tSnap, lockSnap, draftSnap] = await Promise.all([
+  const [mSnap, gSnap, tSnap, lockSnap, draftSnap, userSnap] = await Promise.all([
     db.collection("predictions").doc(uid).collection("matches").get(),
     db.collection("predictions").doc(uid).collection("groups").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("thirdPlace").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("userLock").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("draft").get(),
+    db.collection("users").doc(uid).get(),
   ]);
 
   const matches: Record<number, MatchPrediction> = {};
@@ -62,12 +63,27 @@ export async function GET(req: NextRequest) {
 
   const draft = draftSnap.exists ? draftSnap.data() : null;
 
-  return NextResponse.json({ matches, groups, third, userLocked: lockSnap.exists, draft });
+  // Knockout data from users collection
+  const userDoc = userSnap.exists ? userSnap.data() : {};
+  const knockoutLocked = !!userDoc.knockoutLocked;
+  const knockoutMatches = userDoc.knockoutMatches ?? {};
+  const knockoutDraft = userDoc.knockoutDraft ?? null;
+
+  return NextResponse.json({
+    matches,
+    groups,
+    third,
+    userLocked: lockSnap.exists,
+    draft,
+    knockoutLocked,
+    knockoutMatches,
+    knockoutDraft,
+  });
 }
 
 /**
  * POST /api/predictions   (Authorization: Bearer <Firebase ID token>)
- * Body: { type: "match" | "group" | "third", payload }
+ * Body: { type: "match" | "group" | "third" | "knockout-draft", payload }
  * Saves a single prediction using Admin SDK — bypasses Firestore client auth timing issues.
  */
 export async function POST(req: NextRequest) {
@@ -97,7 +113,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => ({}))) as {
-    type?: "match" | "group" | "third" | "draft";
+    type?: "match" | "group" | "third" | "draft" | "knockout-draft";
     payload?: unknown;
   };
 
@@ -116,6 +132,12 @@ export async function POST(req: NextRequest) {
     } else if (body.type === "draft") {
       // Cross-device soft-save: the full in-progress draft, synced per user.
       await predRef.collection("meta").doc("draft").set(body.payload as object);
+    } else if (body.type === "knockout-draft") {
+      // Cross-device soft-save for knockout predictions to users collection
+      await db.collection("users").doc(uid).set(
+        { knockoutDraft: body.payload },
+        { merge: true },
+      );
     } else {
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
