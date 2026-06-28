@@ -7,7 +7,7 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, getPredCounts, getReminderStatus, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockUser, uploadTeamLogo, type ReminderStatus } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, getPredCounts, getReminderStatus, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockAllUsers, unlockUser, uploadTeamLogo, type ReminderStatus } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PunditDesk } from "@/components/PunditDesk";
@@ -26,6 +26,7 @@ export function AdminClient() {
   const [predCounts, setPredCounts] = useState<Record<string, number>>({});
   const [lockStatus, setLockStatus] = useState<Record<string, boolean>>({});
   const [unlockingUid, setUnlockingUid] = useState<string | null>(null);
+  const [unlockingAll, setUnlockingAll] = useState(false);
   const [reminderBusy, setReminderBusy] = useState<string | null>(null);
   const [reminderNote, setReminderNote] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<ReminderStatus | null>(null);
@@ -181,18 +182,39 @@ export function AdminClient() {
   }
 
   async function handleUnlock(uid: string, teamName: string) {
-    if (!window.confirm(`Unlock ${teamName}'s predictions so they can edit and re-submit? Their current picks are kept.`)) return;
+    if (!window.confirm(`Unlock ${teamName}'s knockout picks only? Group picks stay locked.`)) return;
     setUnlockingUid(uid);
     try {
       const r = await unlockUser(uid);
       if (r.ok) {
-        setLockStatus(prev => ({ ...prev, [uid]: false }));
-        flash(`✓ Unlocked ${teamName} — they can edit and lock in again`);
+        flash(`✓ Unlocked knockout picks for ${teamName}`);
       } else {
         flash(`Failed: ${r.error ?? "unknown error"}`);
       }
     } finally {
       setUnlockingUid(null);
+    }
+  }
+
+  async function handleUnlockAll() {
+    if (!league) return;
+    const lockedUsers = league.users.filter((u) => lockStatus[u.uid]);
+    if (lockedUsers.length === 0) {
+      flash("No locked players found.");
+      return;
+    }
+    if (!window.confirm(`Unlock knockout picks for all ${lockedUsers.length} locked player(s)? Group picks stay locked.`)) return;
+    setUnlockingAll(true);
+    try {
+      const r = await unlockAllUsers();
+      if (!r.ok) {
+        flash(`Failed: ${r.error ?? "unknown error"}`);
+        return;
+      }
+      const scannedNote = typeof r.users === "number" ? ` (${r.users} total users scanned)` : "";
+      flash(`✓ Unlocked knockout picks for ${lockedUsers.length} player(s)${scannedNote}`);
+    } finally {
+      setUnlockingAll(false);
     }
   }
 
@@ -538,10 +560,18 @@ export function AdminClient() {
       <section className="card p-4">
         <h2 className="mb-3 font-semibold">Prediction status</h2>
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Match predictions each player has submitted, and whether they&apos;ve locked in. Unlock a
-          player to let them edit and re-submit — their current picks are kept. (Only works before the
-          first match kicks off; after that the deadline locks everyone.)
+          Match predictions each player has submitted, and whether they&apos;ve locked in. Unlock only
+          knockout picks for locked players while keeping group-stage picks locked in place.
         </p>
+        <div className="mb-3 flex justify-end">
+          <button
+            className="btn-ghost text-xs"
+            onClick={handleUnlockAll}
+            disabled={unlockingAll}
+          >
+            {unlockingAll ? "Unlocking all…" : "🔓 Unlock knockout picks (all locked players)"}
+          </button>
+        </div>
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
           <table className="w-full text-sm">
             <thead className="bg-[var(--bg-elev)] text-xs uppercase text-[var(--muted)]">
@@ -575,11 +605,11 @@ export function AdminClient() {
                         {locked ? (
                           <button
                             onClick={() => handleUnlock(u.uid, u.teamName)}
-                            disabled={unlockingUid === u.uid}
+                            disabled={unlockingAll || unlockingUid === u.uid}
                             className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
-                            title="Unlock so this player can edit and re-submit"
+                            title="Unlock knockout picks only"
                           >
-                            {unlockingUid === u.uid ? "Unlocking…" : "🔒 Unlock"}
+                            {unlockingUid === u.uid ? "Unlocking…" : "🔓 Unlock Knockout"}
                           </button>
                         ) : (
                           <span className="text-xs text-[var(--muted)]">Open</span>

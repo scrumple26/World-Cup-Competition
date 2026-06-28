@@ -132,6 +132,7 @@ export function PredictionsClient({
     resetThirdPlaceOverride,
     lockIn,
     isUserLocked,
+    isKnockoutUnlocked,
     isLocked,
     locking,
     lockError,
@@ -206,7 +207,9 @@ export function PredictionsClient({
           <span className="font-semibold text-[var(--accent)]">🔒 Predictions are locked.</span>
           <span className="ml-2 text-[var(--muted)]">
             {isUserLocked
-              ? "Your picks are submitted."
+              ? (isKnockoutUnlocked
+                ? "Your group picks are locked, but knockout picks are unlocked for editing."
+                : "Your picks are submitted.")
               : "The deadline has passed — picks that were never locked in were not submitted and score 0."}
           </span>
         </div>
@@ -239,7 +242,8 @@ export function PredictionsClient({
         <KnockoutPredictions
           matches={matches}
           saveStates={saveStates}
-          onMatchChange={setMatch}
+          onMatchChange={(fixtureId, home, away, predictedWinner) =>
+            setMatch(fixtureId, home, away, predictedWinner, true)}
         />
       ) : (
         <>

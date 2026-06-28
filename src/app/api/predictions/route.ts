@@ -36,12 +36,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const [mSnap, gSnap, tSnap, lockSnap, draftSnap] = await Promise.all([
+  const [mSnap, gSnap, tSnap, lockSnap, draftSnap, koUnlockSnap] = await Promise.all([
     db.collection("predictions").doc(uid).collection("matches").get(),
     db.collection("predictions").doc(uid).collection("groups").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("thirdPlace").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("userLock").get(),
     db.collection("predictions").doc(uid).collection("meta").doc("draft").get(),
+    db.collection("predictions").doc(uid).collection("meta").doc("knockoutUnlock").get(),
   ]);
 
   const matches: Record<number, MatchPrediction> = {};
@@ -62,7 +63,14 @@ export async function GET(req: NextRequest) {
 
   const draft = draftSnap.exists ? draftSnap.data() : null;
 
-  return NextResponse.json({ matches, groups, third, userLocked: lockSnap.exists, draft });
+  return NextResponse.json({
+    matches,
+    groups,
+    third,
+    userLocked: lockSnap.exists,
+    knockoutUnlocked: koUnlockSnap.exists,
+    draft,
+  });
 }
 
 /**
