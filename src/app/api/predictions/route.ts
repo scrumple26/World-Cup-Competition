@@ -18,7 +18,6 @@ type UserKnockoutData = {
   knockoutMatches?: Record<string, MatchPrediction>;
   knockoutDraft?: object | null;
 };
-
 /**
  * GET /api/predictions?uid=...
  * Returns all predictions for a given user (Admin SDK, no auth required for reads).
@@ -104,7 +103,7 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST /api/predictions   (Authorization: ****** ID token>)
+ * POST /api/predictions
  * Body: { type: "match" | "group" | "third" | "draft" | "knockout-draft", payload }
  * Saves a single prediction using Admin SDK — bypasses Firestore client auth timing issues.
  */

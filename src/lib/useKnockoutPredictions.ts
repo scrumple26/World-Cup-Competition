@@ -296,7 +296,7 @@ export function useKnockoutPredictions(
     } catch {
       return 0;
     }
-  }, [uid, isUserLocked, matches]);
+  }, [uid, isUserLocked]);
 
   return {
     loaded,

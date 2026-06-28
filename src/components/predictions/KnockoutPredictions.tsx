@@ -112,6 +112,7 @@ export function KnockoutPredictions({
                   {fixtures.map((m) => {
                     const p = matches[m.id];
                     const locked = isLocked(m) || isUserLocked || lockedMatches.has(m.id);
+                    const canLockThisMatch = !!p && !locked;
                     return (
                       <div key={m.id} className="space-y-1">
                         <MatchPredictionCard
@@ -124,7 +125,7 @@ export function KnockoutPredictions({
                           predictedWinner={p?.predictedWinner}
                           onChange={(h, a, winner) => onMatchChange(m.id, h, a, winner)}
                         />
-                        {!isUserLocked && !isLocked(m) && matches[m.id] && !lockedMatches.has(m.id) && (
+                        {canLockThisMatch && (
                           <button
                             onClick={() => onLockGame(m.id)}
                             className="w-full rounded-md border border-[var(--accent)]/50 bg-[var(--accent)]/10 px-2 py-1.5 text-xs font-medium text-[var(--accent)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/20 transition"
