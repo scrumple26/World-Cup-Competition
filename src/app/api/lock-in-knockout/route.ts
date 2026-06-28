@@ -57,9 +57,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Only save knockout predictions (ignore any group-stage fixtures in the payload)
-  const knockoutPredictions = predictions.filter(
-    (p) => knockoutIds.size === 0 || knockoutIds.has(p.fixtureId),
-  );
+  if (knockoutIds.size === 0) {
+    return NextResponse.json({ error: "No knockout fixtures found — cannot lock in knockout picks." }, { status: 500 });
+  }
+  const knockoutPredictions = predictions.filter((p) => knockoutIds.has(p.fixtureId));
 
   // Batch write knockout predictions
   const BATCH_SIZE = 400;
