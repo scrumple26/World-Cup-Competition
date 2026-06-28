@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import type { Bracket, BracketMatchup, BracketTeam } from "@/lib/bracket";
+import type { FriendRound } from "@/lib/useKnockoutRoundPoints";
+
+/** roundPoints[round][uid] — live head-to-head points, when the KO has begun. */
+type RoundPoints = Record<FriendRound, Record<string, number>>;
 
 // ---- Shared slot component ----
 
@@ -10,11 +14,14 @@ function TeamSlot({
   label,
   isWinner,
   highlightUid,
+  roundPts,
 }: {
   team: BracketTeam | null;
   label: string;
   isWinner: boolean;
   highlightUid?: string;
+  /** Live points for this round (knockout in progress); undefined = projection. */
+  roundPts?: number;
 }) {
   const me = team?.uid === highlightUid;
   const base = "flex items-center gap-1.5 px-2 py-1.5 text-xs";
@@ -25,13 +32,16 @@ function TeamSlot({
       <div className={`${base} text-[var(--muted)] italic`}>{label}</div>
     );
   }
+  // In the knockout, the trailing number is this round's head-to-head points;
+  // before it starts (roundPts undefined) it's the seed/group points.
+  const trailing = roundPts !== undefined ? `${roundPts} pt${roundPts === 1 ? "" : "s"}` : team.points;
   return (
     <Link href={`/team/${team.uid}`} className={`${cls} hover:bg-[var(--bg-elev)] rounded transition`}>
       <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-[var(--border)] text-[10px] text-[var(--muted)]">
         {team.seed}
       </span>
       <span className="min-w-0 flex-1 truncate">{team.teamName}</span>
-      <span className="shrink-0 text-[var(--muted)]">{team.points}</span>
+      <span className={`shrink-0 ${isWinner ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>{trailing}</span>
     </Link>
   );
 }
@@ -41,20 +51,30 @@ function TeamSlot({
 function MatchCard({
   m,
   highlightUid,
+  roundPoints,
+  roundComplete,
   onClick,
 }: {
   m: BracketMatchup;
   highlightUid?: string;
+  roundPoints?: RoundPoints;
+  roundComplete?: Record<FriendRound, boolean>;
   onClick?: () => void;
 }) {
+  const ptsFor = (uid?: string) =>
+    roundPoints && uid ? (roundPoints[m.round][uid] ?? 0) : undefined;
+  // While a round is live the leader is provisional; mark it clearly once locked.
+  const locked = roundComplete?.[m.round] ?? false;
   return (
     <div
-      className={`w-44 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-card)] ${onClick ? "cursor-pointer hover:border-[var(--accent-2)] transition" : ""}`}
+      className={`w-44 overflow-hidden rounded-lg border bg-[var(--bg-card)] ${
+        roundPoints && !locked && (m.a || m.b) ? "border-green-500/40" : "border-[var(--border)]"
+      } ${onClick ? "cursor-pointer hover:border-[var(--accent-2)] transition" : ""}`}
       onClick={onClick}
     >
-      <TeamSlot team={m.a} label={m.aLabel} isWinner={!!m.winnerUid && m.a?.uid === m.winnerUid} highlightUid={highlightUid} />
+      <TeamSlot team={m.a} label={m.aLabel} isWinner={!!m.winnerUid && m.a?.uid === m.winnerUid} highlightUid={highlightUid} roundPts={ptsFor(m.a?.uid)} />
       <div className="border-t border-[var(--border)]" />
-      <TeamSlot team={m.b} label={m.bLabel} isWinner={!!m.winnerUid && m.b?.uid === m.winnerUid} highlightUid={highlightUid} />
+      <TeamSlot team={m.b} label={m.bLabel} isWinner={!!m.winnerUid && m.b?.uid === m.winnerUid} highlightUid={highlightUid} roundPts={ptsFor(m.b?.uid)} />
     </div>
   );
 }
@@ -100,18 +120,22 @@ function R1Pair({
   top,
   bottom,
   highlightUid,
+  roundPoints,
+  roundComplete,
   onMatchupClick,
 }: {
   top: BracketMatchup;
   bottom: BracketMatchup;
   highlightUid?: string;
+  roundPoints?: RoundPoints;
+  roundComplete?: Record<FriendRound, boolean>;
   onMatchupClick?: (m: BracketMatchup) => void;
 }) {
   return (
     <div className="flex items-stretch">
       <div className="flex flex-col gap-2">
-        <MatchCard m={top} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(top) : undefined} />
-        <MatchCard m={bottom} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(bottom) : undefined} />
+        <MatchCard m={top} highlightUid={highlightUid} roundPoints={roundPoints} roundComplete={roundComplete} onClick={onMatchupClick ? () => onMatchupClick(top) : undefined} />
+        <MatchCard m={bottom} highlightUid={highlightUid} roundPoints={roundPoints} roundComplete={roundComplete} onClick={onMatchupClick ? () => onMatchupClick(bottom) : undefined} />
       </div>
       {/* Connector arms */}
       <div className="flex w-5 flex-col">
@@ -133,10 +157,14 @@ function HBridge() {
 export function BracketView({
   bracket,
   highlightUid,
+  roundPoints,
+  roundComplete,
   onMatchupClick,
 }: {
   bracket: Bracket;
   highlightUid?: string;
+  roundPoints?: RoundPoints;
+  roundComplete?: Record<FriendRound, boolean>;
   onMatchupClick?: (m: BracketMatchup) => void;
 }) {
   // R1 display order (classic bracket): M1, M4 | M2, M3
@@ -144,8 +172,11 @@ export function BracketView({
   const r1TopPair = { top: bracket.r1[0], bottom: bracket.r1[3] };  // 1v8, 4v5
   const r1BotPair = { top: bracket.r1[1], bottom: bracket.r1[2] };  // 2v7, 3v6
 
+  // Only crown a champion once the final is actually finished — not while it's
+  // still being scored live (roundComplete is undefined in projection mode).
+  const finalLocked = roundComplete ? roundComplete.final : true;
   const champion =
-    bracket.final.winnerUid
+    bracket.final.winnerUid && finalLocked
       ? [bracket.final.a, bracket.final.b].find((t) => t?.uid === bracket.final.winnerUid)
       : null;
 
@@ -156,8 +187,8 @@ export function BracketView({
         {/* ---- Round 1 ---- */}
         <RoundColumn title="Round 1">
           <div className="flex flex-col gap-6">
-            <R1Pair top={r1TopPair.top} bottom={r1TopPair.bottom} highlightUid={highlightUid} onMatchupClick={onMatchupClick} />
-            <R1Pair top={r1BotPair.top} bottom={r1BotPair.bottom} highlightUid={highlightUid} onMatchupClick={onMatchupClick} />
+            <R1Pair top={r1TopPair.top} bottom={r1TopPair.bottom} highlightUid={highlightUid} roundPoints={roundPoints} roundComplete={roundComplete} onMatchupClick={onMatchupClick} />
+            <R1Pair top={r1BotPair.top} bottom={r1BotPair.bottom} highlightUid={highlightUid} roundPoints={roundPoints} roundComplete={roundComplete} onMatchupClick={onMatchupClick} />
           </div>
         </RoundColumn>
 
@@ -176,8 +207,8 @@ export function BracketView({
         {/* ---- Semis ---- */}
         <RoundColumn title="Semis">
           <div className="flex flex-col justify-around gap-6" style={{ height: "100%" }}>
-            <MatchCard m={bracket.sf[0]} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(bracket.sf[0]) : undefined} />
-            <MatchCard m={bracket.sf[1]} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(bracket.sf[1]) : undefined} />
+            <MatchCard m={bracket.sf[0]} highlightUid={highlightUid} roundPoints={roundPoints} roundComplete={roundComplete} onClick={onMatchupClick ? () => onMatchupClick(bracket.sf[0]) : undefined} />
+            <MatchCard m={bracket.sf[1]} highlightUid={highlightUid} roundPoints={roundPoints} roundComplete={roundComplete} onClick={onMatchupClick ? () => onMatchupClick(bracket.sf[1]) : undefined} />
           </div>
         </RoundColumn>
 
@@ -191,7 +222,7 @@ export function BracketView({
         {/* ---- Final ---- */}
         <RoundColumn title="Final">
           <div className="flex flex-1 items-center">
-            <MatchCard m={bracket.final} highlightUid={highlightUid} onClick={onMatchupClick ? () => onMatchupClick(bracket.final) : undefined} />
+            <MatchCard m={bracket.final} highlightUid={highlightUid} roundPoints={roundPoints} roundComplete={roundComplete} onClick={onMatchupClick ? () => onMatchupClick(bracket.final) : undefined} />
           </div>
         </RoundColumn>
 

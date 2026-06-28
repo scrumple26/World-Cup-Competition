@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLeague } from "@/lib/useLeague";
-import { buildBracket, type BracketMatchup, type SeedRow } from "@/lib/bracket";
+import { buildBracket, resolveBracketWinners, type BracketMatchup, type SeedRow } from "@/lib/bracket";
 import { useLiveGfcPoints } from "@/lib/useLiveGfcPoints";
+import { useKnockoutRoundPoints } from "@/lib/useKnockoutRoundPoints";
 import { FRIEND_STAGE_WC_ROUNDS } from "@/lib/wc";
 import { fetchFixtures } from "@/lib/wcClient";
 import { isPlayed } from "@/lib/wcMap";
@@ -22,15 +23,19 @@ export function BracketClient() {
   const { user } = useAuth();
   const { data, loading } = useLeague();
   const { deltaByUid, liveActive } = useLiveGfcPoints();
+  const ko = useKnockoutRoundPoints();
   const [selected, setSelected] = useState<BracketMatchup | null>(null);
 
   if (loading || !data) {
     return <p className="text-[var(--muted)]">Loading bracket…</p>;
   }
 
+  // During the group phase the seed (group) points keep moving with live games;
+  // once the knockout starts the seeding is frozen, so don't fold in live group
+  // deltas anymore — the live action now lives in each round's head-to-head.
   const rows: SeedRow[] = data.users.map((u) => {
     const s = data.scores[u.uid];
-    const liveDelta = liveActive ? (deltaByUid[u.uid] ?? 0) : 0;
+    const liveDelta = !ko.started && liveActive ? (deltaByUid[u.uid] ?? 0) : 0;
     return {
       uid: u.uid,
       teamName: u.teamName,
@@ -42,15 +47,20 @@ export function BracketClient() {
   });
 
   const enoughPlayers = data.users.length >= 8;
-  const bracket = buildBracket(rows);
-  const started = false;
+  const started = ko.started;
+  // Once the knockout begins, resolve real winners from each round's live/played
+  // points; before that the bracket is a projection from current seeding.
+  const winners = started
+    ? resolveBracketWinners(rows, { points: ko.points, roundActive: ko.roundActive })
+    : {};
+  const bracket = buildBracket(rows, winners);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold">Knockout Bracket</h2>
         <div className="flex items-center gap-2">
-          {liveActive && (
+          {(started ? ko.liveActive : liveActive) && (
             <span className="flex items-center gap-1 text-[11px] font-bold text-green-400">
               <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
               live points
@@ -62,7 +72,13 @@ export function BracketClient() {
         </div>
       </div>
 
-      {!started && (
+      {started ? (
+        <p className="rounded-lg bg-[var(--accent)]/10 px-4 py-2 text-sm text-[var(--accent)]">
+          The knockout is underway — each matchup shows <b>live head-to-head points</b> from that
+          round&apos;s World Cup games. Winners advance as the round finishes. Click any matchup for the
+          prediction comparison.
+        </p>
+      ) : (
         <p className="rounded-lg bg-amber-500/10 px-4 py-2 text-sm text-amber-200/90">
           The knockout hasn&apos;t started yet — this is a <b>projection</b> based on current points.
           Click any matchup to see a head-to-head prediction comparison.
@@ -78,6 +94,8 @@ export function BracketClient() {
           <BracketView
             bracket={bracket}
             highlightUid={user?.uid}
+            roundPoints={started ? ko.points : undefined}
+            roundComplete={started ? ko.roundComplete : undefined}
             onMatchupClick={(m) => setSelected((prev) => prev?.id === m.id ? null : m)}
           />
         </div>
@@ -95,7 +113,7 @@ export function BracketClient() {
       )}
 
       <div className="card p-4">
-        <h2 className="mb-2 font-semibold">Projected seeds</h2>
+        <h2 className="mb-2 font-semibold">{started ? "Seeds" : "Projected seeds"}</h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {bracket.seeds.map((s) => (
             <div

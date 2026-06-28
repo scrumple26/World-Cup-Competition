@@ -9,7 +9,7 @@
  * Before the knockout starts everything is "projected" from current standings.
  */
 
-import { seedKnockout } from "./scoring";
+import { seedKnockout, resolveMatchup, type MatchupSide } from "./scoring";
 import type { FriendGroup } from "./wc";
 
 export interface BracketTeam {
@@ -114,4 +114,55 @@ export function buildBracket(rows: SeedRow[], winners: Winners = {}): Bracket {
   };
 
   return { seeds, r1, sf, final };
+}
+
+/** Per-round head-to-head points + which rounds have started scoring. */
+export interface BracketRoundPoints {
+  points: Record<"r1" | "sf" | "final", Record<string, number>>;
+  /** A round is only resolved once it has a played/live WC fixture. */
+  roundActive: Record<"r1" | "sf" | "final", boolean>;
+}
+
+/**
+ * Resolve the live bracket winners from each round's head-to-head points.
+ *
+ * Rounds are resolved in order (r1 → sf → final) because a later round's
+ * entrants are the previous round's winners. A round is only decided once it
+ * has started scoring; until then later matchups stay TBD. Within a matchup the
+ * higher round points wins, tie-broken by cumulative points then a coin flip
+ * (see resolveMatchup).
+ */
+export function resolveBracketWinners(
+  rows: SeedRow[],
+  rp: BracketRoundPoints,
+): Winners {
+  // Cumulative tiebreak = seed (group) points + everything earned in the KO.
+  const cumulative = new Map<string, number>();
+  for (const r of rows) {
+    const ko =
+      (rp.points.r1[r.uid] ?? 0) +
+      (rp.points.sf[r.uid] ?? 0) +
+      (rp.points.final[r.uid] ?? 0);
+    cumulative.set(r.uid, r.groupPoints + ko);
+  }
+
+  const winners: Winners = {};
+  const round: ("r1" | "sf" | "final")[] = ["r1", "sf", "final"];
+  for (const key of round) {
+    if (!rp.roundActive[key]) continue;
+    // Rebuild with the winners decided so far so this round's entrants are known.
+    const b = buildBracket(rows, winners);
+    const matchups =
+      key === "r1" ? b.r1 : key === "sf" ? b.sf : [b.final];
+    for (const m of matchups) {
+      if (!m.a || !m.b) continue;
+      const side = (uid: string): MatchupSide => ({
+        uid,
+        roundPoints: rp.points[key][uid] ?? 0,
+        cumulative: cumulative.get(uid) ?? 0,
+      });
+      winners[m.id] = resolveMatchup(side(m.a.uid), side(m.b.uid)).uid;
+    }
+  }
+  return winners;
 }
