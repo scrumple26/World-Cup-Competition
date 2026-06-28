@@ -64,10 +64,10 @@ export async function GET(req: NextRequest) {
   const draft = draftSnap.exists ? draftSnap.data() : null;
 
   // Knockout data from users collection
-  const userData = userSnap.exists ? userSnap.data() : {};
-  const knockoutLocked = !!userData.knockoutLocked;
-  const knockoutMatches = userData.knockoutMatches ?? {};
-  const knockoutDraft = userData.knockoutDraft ?? null;
+  const userDoc = userSnap.exists ? userSnap.data() : {};
+  const knockoutLocked = !!userDoc.knockoutLocked;
+  const knockoutMatches = userDoc.knockoutMatches ?? {};
+  const knockoutDraft = userDoc.knockoutDraft ?? null;
 
   return NextResponse.json({
     matches,
@@ -134,9 +134,10 @@ export async function POST(req: NextRequest) {
       await predRef.collection("meta").doc("draft").set(body.payload as object);
     } else if (body.type === "knockout-draft") {
       // Cross-device soft-save for knockout predictions to users collection
-      await db.collection("users").doc(uid).update({
-        knockoutDraft: body.payload,
-      });
+      await db.collection("users").doc(uid).set(
+        { knockoutDraft: body.payload },
+        { merge: true },
+      );
     } else {
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
