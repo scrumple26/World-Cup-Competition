@@ -65,7 +65,7 @@ async function postKnockoutDraft(store: KnockoutPendingStore) {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        type: "knockout-draft",
+        type: "draft",
         payload: {
           matches: store.matches,
           lockedMatches: Array.from(store.lockedMatches),
@@ -104,17 +104,17 @@ export function useKnockoutPredictions(
       .then((d) => {
         if (!active) return;
 
-        const koLocked = !!d.knockoutLocked;
+        const koLocked = !d.knockoutUnlocked && !!d.userLocked;
         setIsUserLocked(koLocked);
 
         if (koLocked) {
           // Already locked — load from Firestore
-          setMatchesState(d.knockoutMatches ?? {});
+          setMatchesState(d.matches ?? {});
           clearKnockoutPending(uid);
         } else {
           // Not locked — merge Firestore draft with localStorage
           const localPending = loadKnockoutPending(uid);
-          const serverDraft = d.knockoutDraft ?? null;
+          const serverDraft = d.draft ?? null;
 
           const hasContent = (s: KnockoutPendingStore | null) =>
             !!s && Object.keys(s.matches ?? {}).length > 0;
