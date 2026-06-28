@@ -28,6 +28,8 @@ export interface AdminResult {
   // Pick-backup detail
   backed?: number;
   skipped?: number;
+  // Bulk unlock detail
+  users?: number;
 }
 
 async function post(path: string, body: unknown): Promise<AdminResult> {
@@ -47,6 +49,7 @@ async function post(path: string, body: unknown): Promise<AdminResult> {
     created: data.created as number | undefined,
     backed: data.backed as number | undefined,
     skipped: data.skipped as number | undefined,
+    users: data.users as number | undefined,
   };
 }
 
@@ -231,6 +234,11 @@ export async function getReminderStatus(): Promise<ReminderStatus> {
 export async function unlockUser(uid: string): Promise<AdminResult> {
   if (USE_MOCK) return { ok: true, mock: true };
   return post("/api/admin/unlock", { uid });
+}
+
+export async function unlockAllUsers(): Promise<AdminResult> {
+  if (USE_MOCK) return { ok: true, mock: true };
+  return post("/api/admin/unlock", { all: true });
 }
 
 export async function getPredCounts(

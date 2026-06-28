@@ -7,7 +7,7 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, getPredCounts, getReminderStatus, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockUser, uploadTeamLogo, type ReminderStatus } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, getPredCounts, getReminderStatus, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockAllUsers, unlockUser, uploadTeamLogo, type ReminderStatus } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PunditDesk } from "@/components/PunditDesk";
@@ -207,25 +207,17 @@ export function AdminClient() {
     if (!window.confirm(`Unlock all ${lockedUsers.length} locked player(s)? Their current picks will be kept.`)) return;
     setUnlockingAll(true);
     try {
-      const unlocked: string[] = [];
-      let failed = 0;
-      for (const u of lockedUsers) {
-        const r = await unlockUser(u.uid);
-        if (r.ok) unlocked.push(u.uid);
-        else failed++;
+      const r = await unlockAllUsers();
+      if (!r.ok) {
+        flash(`Failed: ${r.error ?? "unknown error"}`);
+        return;
       }
-      if (unlocked.length) {
-        setLockStatus((prev) => {
-          const next = { ...prev };
-          for (const uid of unlocked) next[uid] = false;
-          return next;
-        });
-      }
-      if (failed === 0) {
-        flash(`✓ Unlocked ${unlocked.length} player(s)`);
-      } else {
-        flash(`Unlocked ${unlocked.length} player(s), ${failed} failed`);
-      }
+      setLockStatus((prev) => {
+        const next = { ...prev };
+        for (const u of lockedUsers) next[u.uid] = false;
+        return next;
+      });
+      flash(`✓ Unlocked ${lockedUsers.length} player(s)${typeof r.users === "number" ? ` (${r.users} total users scanned)` : ""}`);
     } finally {
       setUnlockingAll(false);
     }
