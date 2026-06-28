@@ -24,9 +24,9 @@ export const USE_MOCK =
  * no pick edits (enforced server-side in the lock-in / predictions / profile
  * routes). Change this one value to move the deadline.
  *
- * Sunday June 14, 2026, 11:59 PM Central (CDT, UTC-5).
+ * Thursday December 31, 2026, 11:59 PM Central (CST, UTC-6).
  */
-export const PICK_DEADLINE_ISO = "2026-06-14T23:59:00-05:00";
+export const PICK_DEADLINE_ISO = "2026-12-31T23:59:00-06:00";
 export const PICK_DEADLINE_MS = new Date(PICK_DEADLINE_ISO).getTime();
 
 /** True once the hard deadline has passed (total lockout). */
