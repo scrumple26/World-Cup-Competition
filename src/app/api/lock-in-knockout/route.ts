@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import type { MatchPrediction } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -11,6 +11,7 @@ async function authenticate(req: NextRequest): Promise<string | null> {
   const token = authHeader.slice(7);
   try {
     const admin = getAdminAuth();
+    if (!admin) return null;
     const decodedToken = await admin.verifyIdToken(token);
     return decodedToken.uid;
   } catch {
@@ -32,7 +33,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid predictions" }, { status: 400 });
     }
 
-    const db = getAdminFirestore();
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: "Server not configured" }, { status: 503 });
+    }
     const now = Date.now();
 
     // Lock knockout predictions to Firestore
@@ -44,11 +48,15 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    await db.collection("users").doc(uid).update({
-      knockoutMatches: matchesMap,
-      knockoutLocked: true,
-      knockoutLockedAt: new Date(now),
-    });
+    await db.collection("users").doc(uid).set(
+      {
+        knockoutMatches: matchesMap,
+        knockoutLocked: true,
+        knockoutLockedAt: new Date(now),
+        knockoutDraft: null,
+      },
+      { merge: true },
+    );
 
     return NextResponse.json({ success: true });
   } catch (err) {

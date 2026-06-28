@@ -12,6 +12,11 @@ interface KnockoutPendingStore {
   /** Last write time — used to reconcile local vs server draft across devices. */
   updatedAt?: number;
 }
+type SerializedKnockoutDraft = {
+  matches?: Record<number, MatchPrediction>;
+  lockedMatches?: number[];
+  updatedAt?: number;
+};
 
 function lsKey(uid: string) {
   return `ko_predictions_${uid}`;
@@ -114,7 +119,14 @@ export function useKnockoutPredictions(
         } else {
           // Not locked — merge Firestore draft with localStorage
           const localPending = loadKnockoutPending(uid);
-          const serverDraft = d.knockoutDraft ?? null;
+          const serverDraftRaw = (d.knockoutDraft ?? null) as SerializedKnockoutDraft | null;
+          const serverDraft: KnockoutPendingStore | null = serverDraftRaw
+            ? {
+              matches: serverDraftRaw.matches ?? {},
+              lockedMatches: new Set(serverDraftRaw.lockedMatches ?? []),
+              updatedAt: serverDraftRaw.updatedAt,
+            }
+            : null;
 
           const hasContent = (s: KnockoutPendingStore | null) =>
             !!s && Object.keys(s.matches ?? {}).length > 0;
