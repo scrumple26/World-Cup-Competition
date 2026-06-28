@@ -6,6 +6,7 @@ import { FRIEND_STAGE_WC_ROUNDS } from "@/lib/wc";
 import { isLocked } from "@/lib/wcMap";
 import type { MatchPrediction, Outcome, WcMatch } from "@/lib/types";
 import { MatchPredictionCard, type SaveState } from "./MatchPredictionCard";
+import type { useKnockoutPredictions } from "@/lib/useKnockoutPredictions";
 
 const FRIEND_ROUNDS: { key: "ko1" | "ko2" | "kofinal"; title: string; blurb: string }[] = [
   {
@@ -25,18 +26,35 @@ const FRIEND_ROUNDS: { key: "ko1" | "ko2" | "kofinal"; title: string; blurb: str
   },
 ];
 
-export function KnockoutPredictions({
-  matches,
-  saveStates,
-  onMatchChange,
-}: {
+interface KnockoutPredictionsProps {
   matches: Record<number, MatchPrediction>;
+  lockedMatches: Set<number>;
   saveStates: Record<number, SaveState>;
   onMatchChange: (fixtureId: number, home: number | null, away: number | null, predictedWinner?: Outcome) => void;
-}) {
+  onLockGame: (fixtureId: number) => void;
+  onLockAll: () => void;
+  isUserLocked: boolean;
+  locking: boolean;
+  lockError: string | null;
+  pendingCount: number;
+}
+
+export function KnockoutPredictions({
+  matches,
+  lockedMatches,
+  saveStates,
+  onMatchChange,
+  onLockGame,
+  onLockAll,
+  isUserLocked,
+  locking,
+  lockError,
+  pendingCount,
+}: KnockoutPredictionsProps) {
   const [byRound, setByRound] = useState<Record<string, WcMatch[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     const wcRounds = Array.from(new Set(Object.values(FRIEND_STAGE_WC_ROUNDS).flat()));
@@ -74,6 +92,7 @@ export function KnockoutPredictions({
         round; each round&apos;s WC matches unlock once the bracket is drawn.
         If you predict a draw, you must also pick the penalty winner.
       </p>
+
       {FRIEND_ROUNDS.map((fr) => {
         const wcRounds = FRIEND_STAGE_WC_ROUNDS[fr.key];
         const fixtures = wcRounds.flatMap((r) => byRound[r] ?? []);
@@ -89,28 +108,96 @@ export function KnockoutPredictions({
                 (after the group stage finishes).
               </p>
             ) : (
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {fixtures.map((m) => {
-                  const p = matches[m.id];
-                  return (
-                    <MatchPredictionCard
-                      key={m.id}
-                      match={m}
-                      home={p ? p.home : null}
-                      away={p ? p.away : null}
-                      locked={isLocked(m)}
-                      saveState={saveStates[m.id]}
-                      isKnockout
-                      predictedWinner={p?.predictedWinner}
-                      onChange={(h, a, winner) => onMatchChange(m.id, h, a, winner)}
-                    />
-                  );
-                })}
+              <div className="mt-2 space-y-2">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {fixtures.map((m) => {
+                    const p = matches[m.id];
+                    const locked = isLocked(m) || isUserLocked || lockedMatches.has(m.id);
+                    return (
+                      <div key={m.id} className="space-y-1">
+                        <MatchPredictionCard
+                          match={m}
+                          home={p ? p.home : null}
+                          away={p ? p.away : null}
+                          locked={locked}
+                          saveState={saveStates[m.id]}
+                          isKnockout
+                          predictedWinner={p?.predictedWinner}
+                          onChange={(h, a, winner) => onMatchChange(m.id, h, a, winner)}
+                        />
+                        {!isUserLocked && !isLocked(m) && matches[m.id] && !lockedMatches.has(m.id) && (
+                          <button
+                            onClick={() => onLockGame(m.id)}
+                            className="w-full rounded-md border border-[var(--accent)]/50 bg-[var(--accent)]/10 px-2 py-1.5 text-xs font-medium text-[var(--accent)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/20 transition"
+                          >
+                            🔒 Lock this match
+                          </button>
+                        )}
+                        {lockedMatches.has(m.id) && (
+                          <div className="text-center text-xs text-[var(--accent)] font-medium">
+                            ✓ Match locked
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </section>
         );
       })}
+
+      {/* Lock all games section — only shown to real users before locked */}
+      {!isUserLocked && pendingCount > 0 && (
+        <div className="card p-5 space-y-3">
+          {confirming ? (
+            <div className="space-y-4">
+              <div>
+                <div className="font-semibold">Ready to lock all knockout picks?</div>
+                <div className="text-sm text-[var(--muted)]">
+                  You have {pendingCount} knockout prediction{pendingCount !== 1 ? "s" : ""} ready to lock in.
+                  Once locked, you won&apos;t be able to change them.
+                </div>
+              </div>
+              {lockError && <p className="text-sm text-red-400">{lockError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={onLockAll}
+                  disabled={locking}
+                  className="btn-primary flex-1"
+                >
+                  {locking ? "Locking…" : "✓ Confirm & lock all"}
+                </button>
+                <button
+                  onClick={() => setConfirming(false)}
+                  className="btn-ghost flex-1"
+                >
+                  ← Go back and edit
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold">Ready to lock all picks?</div>
+                  <div className="text-sm text-[var(--muted)]">
+                    Your picks auto-save as you enter them. Lock all games at once when you&apos;re ready.
+                  </div>
+                </div>
+                <button
+                  onClick={() => setConfirming(true)}
+                  disabled={pendingCount === 0}
+                  className="btn-primary px-6"
+                >
+                  🔒 Lock All Knockout Picks
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
