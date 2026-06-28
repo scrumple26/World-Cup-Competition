@@ -1,17 +1,34 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
+import { isGroupRound } from "@/lib/wc";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
-async function unlockUid(db: FirebaseFirestore.Firestore, uid: string) {
+async function loadKnockoutFixtureIds(db: FirebaseFirestore.Firestore): Promise<Set<number>> {
+  const ids = new Set<number>();
+  const wcSnap = await db.collection("wcMatches").get();
+  for (const d of wcSnap.docs) {
+    const m = d.data() as { id?: number; round?: string };
+    if (typeof m.id === "number" && typeof m.round === "string" && !isGroupRound(m.round)) {
+      ids.add(m.id);
+    }
+  }
+  return ids;
+}
+
+async function unlockKnockoutForUid(
+  db: FirebaseFirestore.Firestore,
+  uid: string,
+  knockoutIds: Set<number>,
+) {
   const predRef = db.collection("predictions").doc(uid);
 
   try {
-    await predRef.collection("meta").doc("userLock").delete();
+    await predRef.collection("meta").doc("knockoutUnlock").set({ unlockedAt: Date.now() }, { merge: true });
   } catch (error) {
-    console.warn("[admin/unlock] failed to delete userLock doc", { uid, error });
+    console.warn("[admin/unlock] failed to set knockoutUnlock doc", { uid, error });
   }
 
   let matchSnap: FirebaseFirestore.QuerySnapshot | null = null;
@@ -20,10 +37,11 @@ async function unlockUid(db: FirebaseFirestore.Firestore, uid: string) {
   } catch (error) {
     console.warn("[admin/unlock] failed reading match docs", { uid, error });
   }
+
   let cleared = 0;
-  if (matchSnap && !matchSnap.empty) {
+  if (matchSnap && !matchSnap.empty && knockoutIds.size > 0) {
     const BATCH_SIZE = 400;
-    const docs = matchSnap.docs;
+    const docs = matchSnap.docs.filter((d) => knockoutIds.has(Number(d.id)));
     for (let i = 0; i < docs.length; i += BATCH_SIZE) {
       const batch = db.batch();
       for (const d of docs.slice(i, i + BATCH_SIZE)) {
@@ -39,12 +57,9 @@ async function unlockUid(db: FirebaseFirestore.Firestore, uid: string) {
 
 /**
  * POST /api/admin/unlock  { uid } or { all: true }
- * Re-opens a player's predictions for editing (the inverse of /api/lock-in):
- * deletes their `meta/userLock` doc and clears the `userLocked` flag on each
- * saved match. Their existing picks are left untouched — they simply become
- * editable again, so a player who locked in early/incomplete can finish.
- * Admin-only. Note: once the first match kicks off, the global deadline locks
- * everyone regardless, so this is only useful before kickoff.
+ * Unlocks knockout picks only (group picks remain locked): marks
+ * `meta/knockoutUnlock` and clears `userLocked` on knockout match docs.
+ * Admin-only.
  */
 export async function POST(req: NextRequest) {
   if (!(await requireAdmin(req))) {
@@ -57,6 +72,14 @@ export async function POST(req: NextRequest) {
   const { uid, all } = (await req.json().catch(() => ({}))) as { uid?: string; all?: boolean };
   if (!uid && !all) return NextResponse.json({ error: "uid or all=true required" }, { status: 400 });
 
+  let knockoutIds: Set<number>;
+  try {
+    knockoutIds = await loadKnockoutFixtureIds(db);
+  } catch (error) {
+    console.error("[admin/unlock] failed loading knockout fixtures", { error });
+    return NextResponse.json({ error: "Failed to load knockout fixtures" }, { status: 500 });
+  }
+
   if (all) {
     let predDocs: FirebaseFirestore.DocumentReference[] = [];
     try {
@@ -67,12 +90,12 @@ export async function POST(req: NextRequest) {
     }
     let cleared = 0;
     for (const doc of predDocs) {
-      cleared += await unlockUid(db, doc.id);
+      cleared += await unlockKnockoutForUid(db, doc.id, knockoutIds);
     }
-    return NextResponse.json({ ok: true, all: true, users: predDocs.length, cleared });
+    return NextResponse.json({ ok: true, all: true, users: predDocs.length, cleared, scope: "knockout" });
   }
 
-  const cleared = await unlockUid(db, uid as string);
+  const cleared = await unlockKnockoutForUid(db, uid as string, knockoutIds);
 
-  return NextResponse.json({ ok: true, uid, cleared });
+  return NextResponse.json({ ok: true, uid, cleared, scope: "knockout" });
 }

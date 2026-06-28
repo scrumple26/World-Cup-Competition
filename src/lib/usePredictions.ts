@@ -76,6 +76,7 @@ export function usePredictions(
   const [thirdPlace, setThirdPlaceState] = useState<number[]>([]);
   const [thirdPlaceOverridden, setThirdPlaceOverridden] = useState(false);
   const [isUserLocked, setIsUserLocked] = useState(false);
+  const [isKnockoutUnlocked, setIsKnockoutUnlocked] = useState(false);
   const [locking,    setLocking]    = useState(false);
   const [loaded,     setLoaded]     = useState(false);
   const [lockError,  setLockError]  = useState<string | null>(null);
@@ -111,6 +112,7 @@ export function usePredictions(
         if (!active) return;
         const fireLocked = !!d.userLocked;
         setIsUserLocked(fireLocked);
+        setIsKnockoutUnlocked(!!d.knockoutUnlocked);
 
         if (fireLocked) {
           setMatches(d.matches ?? {});
@@ -208,8 +210,15 @@ export function usePredictions(
   // ---- setters — all write to localStorage, blocked after deadline ----
 
   const setMatch = useCallback(
-    (fixtureId: number, home: number | null, away: number | null, predictedWinner?: Outcome) => {
-      if (!uid || isUserLocked || isPastDeadline) return;
+    (
+      fixtureId: number,
+      home: number | null,
+      away: number | null,
+      predictedWinner?: Outcome,
+      allowWhenUserLocked = false,
+    ) => {
+      if (!uid || isPastDeadline) return;
+      if (isUserLocked && !(allowWhenUserLocked && isKnockoutUnlocked)) return;
       const pred: MatchPrediction = {
         fixtureId,
         home: home ?? 0,
@@ -224,7 +233,7 @@ export function usePredictions(
         return next;
       });
     },
-    [uid, isUserLocked, isPastDeadline],
+    [uid, isUserLocked, isKnockoutUnlocked, isPastDeadline],
   );
 
   const setOrder = useCallback(
@@ -382,6 +391,7 @@ export function usePredictions(
     resetThirdPlaceOverride,
     lockIn,
     isUserLocked,
+    isKnockoutUnlocked,
     isPastDeadline,
     isLocked,
     locking,
