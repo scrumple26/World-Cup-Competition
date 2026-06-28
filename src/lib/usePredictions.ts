@@ -218,7 +218,8 @@ export function usePredictions(
       allowWhenUserLocked = false,
     ) => {
       if (!uid || isPastDeadline) return;
-      if (isUserLocked && !(allowWhenUserLocked && isKnockoutUnlocked)) return;
+      const canEditWhenLocked = allowWhenUserLocked && isKnockoutUnlocked;
+      if (isUserLocked && !canEditWhenLocked) return;
       const pred: MatchPrediction = {
         fixtureId,
         home: home ?? 0,

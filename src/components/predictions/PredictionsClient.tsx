@@ -280,8 +280,7 @@ export function PredictionsClient({
               groups={groups}
               matches={matches}
               saveStates={saveStates}
-              onMatchChange={(fixtureId, home, away, predictedWinner) =>
-            setMatch(fixtureId, home, away, predictedWinner, true)}
+              onMatchChange={setMatch}
             />
           ) : (
             <div className="space-y-4">
@@ -294,8 +293,7 @@ export function PredictionsClient({
                   matches={matches}
                   saveStates={saveStates}
                   onReorder={(order, isManual) => setOrder(g.group, order, isManual)}
-                  onMatchChange={(fixtureId, home, away, predictedWinner) =>
-            setMatch(fixtureId, home, away, predictedWinner, true)}
+                  onMatchChange={setMatch}
                   userLocked={isLocked}
                 />
               ))}
