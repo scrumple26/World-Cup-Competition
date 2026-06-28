@@ -217,7 +217,8 @@ export function AdminClient() {
         for (const u of lockedUsers) next[u.uid] = false;
         return next;
       });
-      flash(`✓ Unlocked ${lockedUsers.length} player(s)${typeof r.users === "number" ? ` (${r.users} total users scanned)` : ""}`);
+      const scannedNote = typeof r.users === "number" ? ` (${r.users} total users scanned)` : "";
+      flash(`✓ Unlocked ${lockedUsers.length} player(s)${scannedNote}`);
     } finally {
       setUnlockingAll(false);
     }

@@ -8,9 +8,18 @@ export const dynamic = "force-dynamic";
 async function unlockUid(db: FirebaseFirestore.Firestore, uid: string) {
   const predRef = db.collection("predictions").doc(uid);
 
-  await predRef.collection("meta").doc("userLock").delete().catch(() => {});
+  try {
+    await predRef.collection("meta").doc("userLock").delete();
+  } catch (error) {
+    console.warn("[admin/unlock] failed to delete userLock doc", { uid, error });
+  }
 
-  const matchSnap = await predRef.collection("matches").get().catch(() => null);
+  let matchSnap: FirebaseFirestore.QuerySnapshot | null = null;
+  try {
+    matchSnap = await predRef.collection("matches").get();
+  } catch (error) {
+    console.warn("[admin/unlock] failed reading match docs", { uid, error });
+  }
   let cleared = 0;
   if (matchSnap && !matchSnap.empty) {
     const BATCH_SIZE = 400;
@@ -49,7 +58,13 @@ export async function POST(req: NextRequest) {
   if (!uid && !all) return NextResponse.json({ error: "uid or all=true required" }, { status: 400 });
 
   if (all) {
-    const predDocs = await db.collection("predictions").listDocuments().catch(() => []);
+    let predDocs: FirebaseFirestore.DocumentReference[] = [];
+    try {
+      predDocs = await db.collection("predictions").listDocuments();
+    } catch (error) {
+      console.error("[admin/unlock] failed listing prediction docs", { error });
+      return NextResponse.json({ error: "Failed to list users for unlock" }, { status: 500 });
+    }
     let cleared = 0;
     for (const doc of predDocs) {
       cleared += await unlockUid(db, doc.id);
