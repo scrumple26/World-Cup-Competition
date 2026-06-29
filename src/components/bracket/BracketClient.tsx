@@ -26,13 +26,28 @@ const ROUND_LABEL: Record<"r1" | "sf" | "final", string> = {
   final: "Final",
 };
 
-/** The signed-in user's deepest (current) matchup in the bracket, if any. */
-function findMyMatchup(bracket: { r1: BracketMatchup[]; sf: BracketMatchup[]; final: BracketMatchup }, uid?: string) {
+/**
+ * The signed-in user's current matchup — the deepest round that has actually
+ * started and contains them. buildBracket propagates *provisional* winners into
+ * later rounds while an earlier one is still live, so we must gate on
+ * roundActive: don't jump them to the semifinal slot just because they're
+ * currently winning round 1. Falls back to their round-1 matchup before any
+ * round has kicked off (and null if they didn't make the bracket).
+ */
+function findMyMatchup(
+  bracket: { r1: BracketMatchup[]; sf: BracketMatchup[]; final: BracketMatchup },
+  roundActive: Record<"r1" | "sf" | "final", boolean>,
+  uid?: string,
+) {
   if (!uid) return null;
   const inIt = (m: BracketMatchup) => m.a?.uid === uid || m.b?.uid === uid;
-  if (inIt(bracket.final)) return bracket.final;
-  const sf = bracket.sf.find(inIt);
-  if (sf) return sf;
+  if (roundActive.final && inIt(bracket.final)) return bracket.final;
+  if (roundActive.sf) {
+    const sf = bracket.sf.find(inIt);
+    if (sf) return sf;
+  }
+  // Default to their round-1 matchup (also the correct fallback before any
+  // round has started, or once they've been eliminated in round 1).
   return bracket.r1.find(inIt) ?? null;
 }
 
@@ -73,7 +88,7 @@ export function BracketClient() {
   const bracket = buildBracket(rows, winners);
 
   // The signed-in player's current matchup — shown live once the knockout begins.
-  const myMatchup = started ? findMyMatchup(bracket, user?.uid) : null;
+  const myMatchup = started ? findMyMatchup(bracket, ko.roundActive, user?.uid) : null;
 
   return (
     <div className="space-y-5">
