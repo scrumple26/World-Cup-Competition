@@ -11,6 +11,7 @@ import { fetchFixtures } from "@/lib/wcClient";
 import { isPlayed } from "@/lib/wcMap";
 import type { MatchPrediction, WcMatch } from "@/lib/types";
 import { BracketView } from "./BracketView";
+import { YourMatchup } from "./YourMatchup";
 
 // Map bracket round keys to WC round arrays
 const ROUND_MAP: Record<"r1" | "sf" | "final", string[]> = {
@@ -18,6 +19,22 @@ const ROUND_MAP: Record<"r1" | "sf" | "final", string[]> = {
   sf:    FRIEND_STAGE_WC_ROUNDS.ko2,
   final: FRIEND_STAGE_WC_ROUNDS.kofinal,
 };
+
+const ROUND_LABEL: Record<"r1" | "sf" | "final", string> = {
+  r1: "Round 1",
+  sf: "Semifinal",
+  final: "Final",
+};
+
+/** The signed-in user's deepest (current) matchup in the bracket, if any. */
+function findMyMatchup(bracket: { r1: BracketMatchup[]; sf: BracketMatchup[]; final: BracketMatchup }, uid?: string) {
+  if (!uid) return null;
+  const inIt = (m: BracketMatchup) => m.a?.uid === uid || m.b?.uid === uid;
+  if (inIt(bracket.final)) return bracket.final;
+  const sf = bracket.sf.find(inIt);
+  if (sf) return sf;
+  return bracket.r1.find(inIt) ?? null;
+}
 
 export function BracketClient() {
   const { user } = useAuth();
@@ -55,6 +72,9 @@ export function BracketClient() {
     : {};
   const bracket = buildBracket(rows, winners);
 
+  // The signed-in player's current matchup — shown live once the knockout begins.
+  const myMatchup = started ? findMyMatchup(bracket, user?.uid) : null;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -85,6 +105,16 @@ export function BracketClient() {
         </p>
       )}
 
+      {myMatchup && enoughPlayers && (
+        <YourMatchup
+          matchup={myMatchup}
+          myUid={user?.uid ?? ""}
+          wcRounds={ROUND_MAP[myMatchup.round]}
+          roundLabel={ROUND_LABEL[myMatchup.round]}
+          roundComplete={ko.roundComplete[myMatchup.round]}
+        />
+      )}
+
       {!enoughPlayers ? (
         <div className="card p-6 text-center text-[var(--muted)]">
           Need at least 8 players with scores to project the bracket.
@@ -112,25 +142,29 @@ export function BracketClient() {
         />
       )}
 
-      <div className="card p-4">
-        <h2 className="mb-2 font-semibold">{started ? "Seeds" : "Projected seeds"}</h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {bracket.seeds.map((s) => (
-            <div
-              key={s.uid}
-              className={`rounded-lg border px-3 py-2 text-sm ${
-                s.uid === user?.uid
-                  ? "border-[var(--accent)] bg-[var(--accent)]/10"
-                  : "border-[var(--border)] bg-[var(--bg-elev)]"
-              }`}
-            >
-              <div className="text-xs text-[var(--muted)]">Seed {s.seed} · Grp {s.friendGroup}</div>
-              <div className="truncate font-medium">{s.teamName}</div>
-              <div className="text-xs text-[var(--muted)]">{s.points} pts</div>
-            </div>
-          ))}
+      {/* Seeds are only meaningful while the bracket is a projection. Once the
+          knockout is live the seeding is frozen, so drop this section. */}
+      {!started && (
+        <div className="card p-4">
+          <h2 className="mb-2 font-semibold">Projected seeds</h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {bracket.seeds.map((s) => (
+              <div
+                key={s.uid}
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  s.uid === user?.uid
+                    ? "border-[var(--accent)] bg-[var(--accent)]/10"
+                    : "border-[var(--border)] bg-[var(--bg-elev)]"
+                }`}
+              >
+                <div className="text-xs text-[var(--muted)]">Seed {s.seed} · Grp {s.friendGroup}</div>
+                <div className="truncate font-medium">{s.teamName}</div>
+                <div className="text-xs text-[var(--muted)]">{s.points} pts</div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

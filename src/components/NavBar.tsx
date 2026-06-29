@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { useWcData } from "@/lib/useWcData";
+import { competitionStage, isGroupRound } from "@/lib/wc";
+import { isLocked } from "@/lib/wcMap";
 import { ThemeToggle } from "./ThemeToggle";
 
 const TABS = [
@@ -19,17 +22,87 @@ interface PredStatus {
   matchCount: number;   // match scores entered
   groupCount: number;   // group finish orders set (out of 12)
   thirdCount: number;   // 3rd-place picks selected (out of 8)
+  // Set only during the knockout stage — drives a knockout-completeness badge.
+  knockout?: {
+    total: number;      // open, predictable knockout fixtures
+    entered: number;    // how many already have a prediction
+  };
 }
 
 export function NavBar() {
   const { user, logOut } = useAuth();
   const pathname = usePathname();
+  const { data: wc } = useWcData();
   const [predStatus, setPredStatus] = useState<PredStatus | null>(null);
+
+  // Knockout fixtures still open to predict: drawn (real teams) and not yet
+  // kicked off. Empty unless the competition has reached the knockout stage.
+  const openKoIds = useMemo(() => {
+    if (!wc || competitionStage(wc.fixtures) !== "knockout") return [];
+    return wc.fixtures
+      .filter(
+        (m) =>
+          !isGroupRound(m.round) &&
+          m.homeTeamId > 0 &&
+          m.awayTeamId > 0 &&
+          !isLocked(m),
+      )
+      .map((m) => m.id);
+  }, [wc]);
+  const inKnockoutStage = !!wc && competitionStage(wc.fixtures) === "knockout";
 
   // Fetch prediction status once when user loads (and refresh on path change so
   // it updates after the user visits the Predictions page).
   useEffect(() => {
     if (!user) return;
+
+    // --- Knockout stage: badge reflects knockout pick completeness instead. ---
+    if (inKnockoutStage) {
+      if (openKoIds.length === 0) { setPredStatus(null); return; }
+      const openSet = new Set(openKoIds);
+
+      // Locally soft-saved knockout picks (entered, maybe not yet synced/locked).
+      const localKo = new Set<number>();
+      try {
+        const raw = localStorage.getItem(`pred_pending_${user.uid}`);
+        if (raw) {
+          const p = JSON.parse(raw) as { matches?: Record<string, unknown> };
+          for (const k of Object.keys(p.matches ?? {})) {
+            const id = Number(k);
+            if (openSet.has(id)) localKo.add(id);
+          }
+        }
+      } catch { /* ignore */ }
+
+      const apply = (firestoreIds: number[]) => {
+        const entered = new Set<number>(localKo);
+        for (const id of firestoreIds) if (openSet.has(id)) entered.add(id);
+        setPredStatus({
+          locked: false, matchCount: 0, groupCount: 0, thirdCount: 0,
+          knockout: { total: openKoIds.length, entered: entered.size },
+        });
+      };
+
+      const cacheKey = `ko_summary_${user.uid}`;
+      try {
+        const raw = sessionStorage.getItem(cacheKey);
+        if (raw) {
+          const c = JSON.parse(raw) as { t: number; ids: number[] };
+          if (Date.now() - c.t < 10 * 60_000) { apply(c.ids); return; }
+        }
+      } catch { /* ignore */ }
+
+      fetch(`/api/predictions?uid=${user.uid}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const ids = Object.keys(d.matches ?? {}).map(Number);
+          try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), ids })); } catch { /* ignore */ }
+          apply(ids);
+        })
+        .catch(() => {});
+      return;
+    }
+
     // Check localStorage first — predictions are soft-saved there until Lock In
     try {
       const raw = localStorage.getItem(`pred_pending_${user.uid}`);
@@ -74,23 +147,37 @@ export function NavBar() {
         try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), s })); } catch { /* ignore */ }
       })
       .catch(() => {});
-  }, [user?.uid, pathname]);
+  }, [user?.uid, pathname, inKnockoutStage, openKoIds]);
 
   const tabs = [...TABS];
   if (user?.isAdmin) tabs.push({ href: "/admin", label: "Admin" });
 
-  // Show badge when user hasn't locked in yet
-  const showBadge = predStatus !== null && !predStatus.locked;
+  // In the knockout stage the badge tracks knockout-pick completeness; otherwise
+  // it tracks whether the user has locked in their group-stage predictions.
+  const koStatus = predStatus?.knockout;
+  const showBadge =
+    predStatus !== null &&
+    (koStatus ? koStatus.entered < koStatus.total : !predStatus.locked);
 
-  const tooltipLines = predStatus && !predStatus.locked ? [
-    `📊 Match scores: ${predStatus.matchCount}/72`,
-    `📋 Group finishes: ${predStatus.groupCount}/12`,
-    `🔢 3rd-place picks: ${predStatus.thirdCount}/8`,
-    "",
-    predStatus.matchCount === 0
-      ? "Head to Predictions to start entering your picks."
-      : "Go to Predictions → scroll to the bottom → Lock In Predictions to submit.",
-  ] : [];
+  const badgeTitle = koStatus ? "Knockout picks incomplete" : "Predictions not locked in";
+
+  const tooltipLines = !showBadge
+    ? []
+    : koStatus
+    ? [
+        `🏆 Knockout picks: ${koStatus.entered}/${koStatus.total}`,
+        "",
+        "Head to Predictions → Knockout to finish your picks.",
+      ]
+    : [
+        `📊 Match scores: ${predStatus!.matchCount}/72`,
+        `📋 Group finishes: ${predStatus!.groupCount}/12`,
+        `🔢 3rd-place picks: ${predStatus!.thirdCount}/8`,
+        "",
+        predStatus!.matchCount === 0
+          ? "Head to Predictions to start entering your picks."
+          : "Go to Predictions → scroll to the bottom → Lock In Predictions to submit.",
+      ];
 
   return (
     <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--bg-elev)]/95 backdrop-blur">
@@ -127,7 +214,7 @@ export function NavBar() {
                 </Link>
                 {/* Tooltip */}
                 <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] p-3 text-xs text-[var(--fg)] shadow-xl opacity-0 transition-opacity group-hover:opacity-100">
-                  <p className="font-semibold text-[var(--accent)] mb-2">Predictions not locked in</p>
+                  <p className="font-semibold text-[var(--accent)] mb-2">{badgeTitle}</p>
                   <div className="space-y-1">
                     {tooltipLines.map((line, i) =>
                       line === "" ? (
