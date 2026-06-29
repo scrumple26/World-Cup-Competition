@@ -89,6 +89,9 @@ export function BracketClient() {
 
   // The signed-in player's current matchup — shown live once the knockout begins.
   const myMatchup = started ? findMyMatchup(bracket, ko.roundActive, user?.uid) : null;
+  const logoByUid: Record<string, string | undefined> = Object.fromEntries(
+    data.users.map((u) => [u.uid, u.logoUrl]),
+  );
 
   return (
     <div className="space-y-5">
@@ -127,6 +130,7 @@ export function BracketClient() {
           wcRounds={ROUND_MAP[myMatchup.round]}
           roundLabel={ROUND_LABEL[myMatchup.round]}
           roundComplete={ko.roundComplete[myMatchup.round]}
+          logos={logoByUid}
         />
       )}
 

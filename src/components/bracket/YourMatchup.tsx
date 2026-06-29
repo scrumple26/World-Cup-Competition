@@ -11,12 +11,18 @@ import {
   YAxis,
 } from "recharts";
 import { fetchFixtures } from "@/lib/wcClient";
-import { scoreMatch } from "@/lib/scoring";
+import { POINTS, scoreMatch } from "@/lib/scoring";
 import { isPlayed } from "@/lib/wcMap";
 import type { BracketMatchup, BracketTeam } from "@/lib/bracket";
 import type { MatchPrediction, WcMatch } from "@/lib/types";
 
 const LIVE_STATUSES = new Set(["1H", "HT", "2H", "ET", "P", "BT", "SUSP", "INT", "LIVE"]);
+const DONE_STATUSES = new Set(["FT", "AET", "PEN"]);
+
+// Most a single match can yield: correct outcome + both exact scores + perfect bonus.
+const MAX_PER_MATCH = POINTS.outcome + 2 * POINTS.exactSide + POINTS.perfectBonus;
+// World Cup group stage games — everyone predicts all of them.
+const GROUP_GAMES = 72;
 
 /** Score one prediction against a fixture's current scoreline (0 if unplayed). */
 function pointsFor(pred: MatchPrediction | undefined, m: WcMatch): number {
@@ -29,8 +35,61 @@ function pointsFor(pred: MatchPrediction | undefined, m: WcMatch): number {
   ).total;
 }
 
+/** Trim trailing ".0" but keep halves (points come in 0.5 steps). */
+const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
 const dayLabel = (iso: string) =>
   new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric" }).format(new Date(iso));
+
+// ---- Small presentational helpers ----
+
+function Avatar({ logo, name, ring }: { logo?: string; name: string; ring: string }) {
+  return logo ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={logo} alt="" className="h-9 w-9 shrink-0 rounded-full border object-cover" style={{ borderColor: ring }} />
+  ) : (
+    <span
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-[var(--bg-card)] text-xs font-bold text-[var(--muted)]"
+      style={{ borderColor: ring }}
+    >
+      {name.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <span className="text-[var(--muted)]">{label}</span>
+      <span className="font-medium tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function StatCard({
+  who,
+  accent,
+  groupPts,
+  avg,
+  ceiling,
+}: {
+  who: string;
+  accent: string;
+  groupPts: number;
+  avg: number;
+  ceiling: number;
+}) {
+  return (
+    <div className="space-y-0.5 rounded-lg border border-[var(--border)] bg-[var(--bg-elev)] p-2 text-xs">
+      <div className="mb-1 truncate text-[10px] font-semibold uppercase tracking-wide" style={{ color: accent }}>
+        {who}
+      </div>
+      <StatRow label="Group pts" value={fmt(groupPts)} />
+      <StatRow label="Avg / game" value={avg.toFixed(2)} />
+      <StatRow label="Max this round" value={fmt(ceiling)} />
+    </div>
+  );
+}
 
 interface Point {
   label: string;
@@ -75,12 +134,14 @@ export function YourMatchup({
   wcRounds,
   roundLabel,
   roundComplete,
+  logos,
 }: {
   matchup: BracketMatchup;
   myUid: string;
   wcRounds: string[];
   roundLabel: string;
   roundComplete?: boolean;
+  logos: Record<string, string | undefined>;
 }) {
   const me: BracketTeam | null = matchup.a?.uid === myUid ? matchup.a : matchup.b;
   const opp: BracketTeam | null = matchup.a?.uid === myUid ? matchup.b : matchup.a;
@@ -137,6 +198,26 @@ export function YourMatchup({
     return pts;
   }, [fixtures, predsMe, predsOpp]);
 
+  // Locked points (finished games only) and how much is still up for grabs.
+  const standing = useMemo(() => {
+    const finals = fixtures.filter((m) => DONE_STATUSES.has(m.status));
+    let lockedYou = 0;
+    let lockedOpp = 0;
+    for (const m of finals) {
+      lockedYou += pointsFor(predsMe[m.id], m);
+      lockedOpp += pointsFor(predsOpp[m.id], m);
+    }
+    const remaining = fixtures.length - finals.length;
+    const pool = MAX_PER_MATCH * remaining;
+    return {
+      total: fixtures.length,
+      remaining,
+      pool,
+      ceilingYou: lockedYou + pool,
+      ceilingOpp: lockedOpp + pool,
+    };
+  }, [fixtures, predsMe, predsOpp]);
+
   const youTotal = series[series.length - 1]?.you ?? 0;
   const oppTotal = series[series.length - 1]?.opp ?? 0;
   const hasData = series.length > 1;
@@ -164,22 +245,45 @@ export function YourMatchup({
         </p>
       ) : (
         <>
-          {/* Score line */}
+          {/* Score line with logos */}
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-            <div className={`text-right ${youLeading && !tied ? "font-bold" : ""}`}>
-              <div className="text-[10px] uppercase tracking-widest text-[var(--accent)]">You</div>
-              <div className="truncate text-sm">#{me.seed} {me.teamName}</div>
+            <div className="flex min-w-0 items-center justify-end gap-2">
+              <div className={`min-w-0 text-right ${youLeading && !tied ? "font-bold" : ""}`}>
+                <div className="text-[10px] uppercase tracking-widest text-[var(--accent)]">You</div>
+                <div className="truncate text-sm">#{me.seed} {me.teamName}</div>
+              </div>
+              <Avatar logo={logos[me.uid]} name={me.teamName} ring="var(--accent)" />
             </div>
-            <div className="flex items-center gap-2 font-mono text-2xl font-bold tabular-nums">
-              <span className={youLeading && !tied ? "text-[var(--accent)]" : "text-[var(--muted)]"}>{youTotal}</span>
-              <span className="text-sm text-[var(--muted)]">–</span>
-              <span className={!youLeading && !tied ? "text-[var(--accent-2)]" : "text-[var(--muted)]"}>{oppTotal}</span>
+            <div className="flex flex-col items-center">
+              <div className="flex items-center gap-2 font-mono text-2xl font-bold tabular-nums">
+                <span className={youLeading && !tied ? "text-[var(--accent)]" : "text-[var(--muted)]"}>{fmt(youTotal)}</span>
+                <span className="text-sm text-[var(--muted)]">–</span>
+                <span className={!youLeading && !tied ? "text-[var(--accent-2)]" : "text-[var(--muted)]"}>{fmt(oppTotal)}</span>
+              </div>
+              <div className="text-[10px] uppercase tracking-widest text-[var(--muted)]">round points</div>
             </div>
-            <div className={`${!youLeading && !tied ? "font-bold" : ""}`}>
-              <div className="text-[10px] uppercase tracking-widest text-[var(--accent-2)]">Opponent</div>
-              <div className="truncate text-sm">#{opp.seed} {opp.teamName}</div>
+            <div className="flex min-w-0 items-center gap-2">
+              <Avatar logo={logos[opp.uid]} name={opp.teamName} ring="var(--accent-2)" />
+              <div className={`min-w-0 ${!youLeading && !tied ? "font-bold" : ""}`}>
+                <div className="text-[10px] uppercase tracking-widest text-[var(--accent-2)]">Opponent</div>
+                <div className="truncate text-sm">#{opp.seed} {opp.teamName}</div>
+              </div>
             </div>
           </div>
+
+          {/* Group-stage form + max still reachable this round */}
+          <div className="grid grid-cols-2 gap-2">
+            <StatCard who={me.teamName} accent="var(--accent)" groupPts={me.points} avg={me.points / GROUP_GAMES} ceiling={standing.ceilingYou} />
+            <StatCard who={opp.teamName} accent="var(--accent-2)" groupPts={opp.points} avg={opp.points / GROUP_GAMES} ceiling={standing.ceilingOpp} />
+          </div>
+
+          {/* Potential points still in play this round */}
+          {standing.remaining > 0 && (
+            <div className="rounded-lg bg-[var(--bg-elev)] px-4 py-2 text-center text-xs text-[var(--muted)]">
+              🎯 <b className="text-[var(--fg)]">{fmt(standing.pool)}</b> pts still on the table ·{" "}
+              {standing.remaining} of {standing.total} games left
+            </div>
+          )}
 
           {/* Points-over-time chart */}
           {loading ? (
@@ -197,7 +301,7 @@ export function YourMatchup({
                 <LineChart data={series} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted)" }} stroke="var(--border)" />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--muted)" }} stroke="var(--border)" />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} stroke="var(--border)" />
                   <Tooltip
                     content={<ChartTooltip youName={me.teamName} oppName={opp.teamName} />}
                   />
