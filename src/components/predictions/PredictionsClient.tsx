@@ -10,6 +10,7 @@ import { FlashcardMode } from "./FlashcardMode";
 import { KnockoutPredictions } from "./KnockoutPredictions";
 import type { MatchPrediction, WcMatch } from "@/lib/types";
 import { PICK_DEADLINE_ISO } from "@/lib/config";
+import { competitionStage } from "@/lib/wc";
 
 const CT = "America/Chicago";
 
@@ -162,18 +163,37 @@ export function PredictionsClient({
     if (autoThirdPlace.length > 0) setThirdPlaceAuto(autoThirdPlace);
   }, [autoThirdPlace, setThirdPlaceAuto]);
 
+  // Whether the World Cup has reached the knockout stage (KO game live/played,
+  // or every group game finished). Drives the default Predictions tab.
+  const isKnockoutStage = useMemo(
+    () => (data ? competitionStage(data.fixtures) === "knockout" : false),
+    [data],
+  );
+
   const [mode, setMode] = useState<Mode>("group");
   const [stage, setStage] = useState<Stage>(() => {
     if (typeof sessionStorage !== "undefined") {
       const saved = sessionStorage.getItem("pred-stage");
-      if (saved === "knockout") return "knockout";
+      if (saved === "knockout" || saved === "group") return saved as Stage;
     }
     return "group";
   });
+  // True once the user has explicitly chosen a stage this session — we won't
+  // auto-switch the default out from under them after that.
+  const [stagePinned, setStagePinned] = useState(
+    () => typeof sessionStorage !== "undefined" && !!sessionStorage.getItem("pred-stage"),
+  );
   const [confirming, setConfirming] = useState(false);
+
+  // Default to the Knockout tab once the competition reaches the knockout stage,
+  // unless the user has already picked a stage themselves this session.
+  useEffect(() => {
+    if (!stagePinned && isKnockoutStage) setStage("knockout");
+  }, [stagePinned, isKnockoutStage]);
 
   function changeStage(s: Stage) {
     setStage(s);
+    setStagePinned(true);
     try { sessionStorage.setItem("pred-stage", s); } catch { /* non-fatal */ }
   }
 
