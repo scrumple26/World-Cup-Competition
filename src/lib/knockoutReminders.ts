@@ -108,6 +108,11 @@ export function decideKnockoutReminders(
       plan.skipped.push({ round, kind: "open", reason: "already-sent" });
     } else if (open === 0) {
       plan.skipped.push({ round, kind: "open", reason: "not-published" });
+    } else if (kickoff !== null && input.now >= kickoff) {
+      // The round's first game has already kicked off — picks are locking/locked,
+      // so a "picks are open" announcement is stale. Also what makes deploying
+      // mid-tournament safe: we never blast an alert about a round in progress.
+      plan.skipped.push({ round, kind: "open", reason: "past-kickoff" });
     } else if (!ready) {
       // Fixtures are up but we can't yet name the survivors (prior round still
       // undecided) — hold the email until the bracket resolves.

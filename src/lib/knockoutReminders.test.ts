@@ -88,6 +88,20 @@ describe("decideKnockoutReminders — round open", () => {
     expect(plan.skipped).toContainEqual({ round: "r1", kind: "open", reason: "already-sent" });
   });
 
+  it("does not announce a round whose first game has already kicked off", () => {
+    // Mirrors deploying mid-Round-of-32: fixtures published, survivors known,
+    // but the round is already underway — the announcement would be stale.
+    const plan = decideKnockoutReminders(
+      baseInput({
+        now: 5_000,
+        openFixtureCount: { r1: 16, sf: 0, final: 0 },
+        firstKickoff: { r1: 4_000, sf: null, final: null },
+      }),
+    );
+    expect(plan.open).toHaveLength(0);
+    expect(plan.skipped).toContainEqual({ round: "r1", kind: "open", reason: "past-kickoff" });
+  });
+
   it("holds the sf email until r1 has resolved its survivors", () => {
     // sf fixtures are published, but r1 winners aren't known yet → don't guess.
     const plan = decideKnockoutReminders(baseInput({ openFixtureCount: { r1: 0, sf: 2, final: 0 } }));
