@@ -174,29 +174,29 @@ export function AdminClient() {
           `${r.count ?? 0} player(s) would get the ${phase} email${names ? `: ${names}` : " — nobody (everyone's locked in)."}`,
         );
       }
+    } catch {
+      setReminderNote("Request failed.");
+    } finally {
+      setReminderBusy(null);
+    }
+  }
 
-      async function runKnockoutReminder(mode: "send" | "test" | "dry") {
-        const key = `ko-${mode}`;
-        setReminderBusy(key);
-        setReminderNote(null);
-        try {
-          const r = await sendKnockoutReminder(mode);
-          if (!r.ok) { setReminderNote(`Failed: ${r.error ?? "unknown error"}`); return; }
-          if (mode === "test") {
-            setReminderNote(`✓ Sent the semi-final reminder to you (${user?.email}). Check your inbox.`);
-          } else if (mode === "dry") {
-            const names = (r.recipients ?? []).map(x => x.teamName).join(", ");
-            setReminderNote(
-              `${r.count ?? 0} reopened player(s) would get the semi-final email${names ? `: ${names}` : " — nobody is reopened."}`,
-            );
-          } else {
-            setReminderNote(`✓ Sent semi-final reminder to ${r.sent ?? 0}/${r.count ?? 0} reopened player(s).`);
-          }
-        } catch {
-          setReminderNote("Request failed.");
-        } finally {
-          setReminderBusy(null);
-        }
+  async function runKnockoutReminder(mode: "send" | "test" | "dry") {
+    const key = `ko-${mode}`;
+    setReminderBusy(key);
+    setReminderNote(null);
+    try {
+      const r = await sendKnockoutReminder(mode);
+      if (!r.ok) { setReminderNote(`Failed: ${r.error ?? "unknown error"}`); return; }
+      if (mode === "test") {
+        setReminderNote(`✓ Sent the semi-final reminder to you (${user?.email}). Check your inbox.`);
+      } else if (mode === "dry") {
+        const names = (r.recipients ?? []).map(x => x.teamName).join(", ");
+        setReminderNote(
+          `${r.count ?? 0} reopened player(s) would get the semi-final email${names ? `: ${names}` : " — nobody is reopened."}`,
+        );
+      } else {
+        setReminderNote(`✓ Sent semi-final reminder to ${r.sent ?? 0}/${r.count ?? 0} reopened player(s).`);
       }
     } catch {
       setReminderNote("Request failed.");
