@@ -95,7 +95,7 @@ export function KnockoutPredictions({
                   if (byRound.length === 0) return null;
                   return (
                     <div key={round}>
-                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
                         {round} matchups
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">

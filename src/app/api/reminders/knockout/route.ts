@@ -13,7 +13,7 @@ export const maxDuration = 60;
 type Mode = "send" | "test" | "dry";
 
 /** Real users with email whose knockout picks are currently unlocked. */
-async function unlockedKnockoutRecipients(db: Firestore): Promise<UserProfile[]> {
+async function getPlayersWithUnlockedKnockoutPicks(db: Firestore): Promise<UserProfile[]> {
   const usersSnap = await db.collection("users").get();
   const real = usersSnap.docs
     .map((d) => d.data() as UserProfile)
@@ -37,7 +37,7 @@ async function run(mode: Mode) {
   const db = getAdminDb();
   if (!db) return NextResponse.json({ error: "not configured" }, { status: 503 });
 
-  const list = await unlockedKnockoutRecipients(db);
+  const list = await getPlayersWithUnlockedKnockoutPicks(db);
   if (mode === "dry") {
     return NextResponse.json({
       ok: true,

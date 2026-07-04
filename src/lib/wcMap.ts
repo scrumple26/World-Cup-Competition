@@ -2,7 +2,7 @@
 
 import type { ApiFixture, ApiStandingRow } from "./apiFootball";
 import type { WcMatch } from "./types";
-const NON_PLAYABLE_STATUSES = new Set(["FT", "AET", "PEN", "1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
+const LOCKED_MATCH_STATUSES = new Set(["FT", "AET", "PEN", "1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
 
 /** A WC group standings table for one group (e.g. "Group A"). */
 export interface WcGroupStanding {
@@ -91,5 +91,5 @@ export function isPlayed(m: WcMatch): boolean {
 export function isLocked(m: WcMatch, now = Date.now()): boolean {
   const kickoffPassed = new Date(m.kickoff).getTime() <= now;
   if (kickoffPassed) return true;
-  return NON_PLAYABLE_STATUSES.has(m.status);
+  return LOCKED_MATCH_STATUSES.has(m.status);
 }

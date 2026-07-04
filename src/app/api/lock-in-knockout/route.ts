@@ -63,13 +63,18 @@ export async function POST(req: NextRequest) {
   const knockoutPredictions = predictions.filter((p) => knockoutById.has(p.fixtureId));
 
   const missingTieWinners = knockoutPredictions.filter(
-    (p) => p.home === p.away && p.predictedWinner !== "home" && p.predictedWinner !== "away",
+    (p) =>
+      typeof p.home === "number" &&
+      typeof p.away === "number" &&
+      p.home === p.away &&
+      p.predictedWinner !== "home" &&
+      p.predictedWinner !== "away",
   );
   if (missingTieWinners.length > 0) {
     const round = knockoutById.get(missingTieWinners[0].fixtureId) ?? "knockout";
     return NextResponse.json(
       {
-        error: `Draw predicted in ${round}. Pick a winner for ties (penalties/shootout) before locking in.`,
+        error: `Draw predicted in ${round}. Pick a winner for ties (penalties/shootout) before submitting.`,
         missingTieWinnerFixtureIds: missingTieWinners.map((p) => p.fixtureId),
       },
       { status: 400 },
