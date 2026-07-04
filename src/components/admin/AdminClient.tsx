@@ -7,7 +7,7 @@ import { useWcData } from "@/lib/useWcData";
 import { FRIEND_GROUPS, type FriendGroup } from "@/lib/wc";
 import type { Outcome, UserProfile } from "@/lib/types";
 import type { FeedPost } from "@/lib/feedTypes";
-import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, getPredCounts, getReminderStatus, overrideResult, removeUser, sendReminderTest, setUserGroup, syncNow, unlockAllUsers, unlockUser, uploadTeamLogo, type ReminderStatus } from "@/lib/adminRepo";
+import { backupLockedPicks, createFeedPost, deleteFeedPost, fillTeams, generatePunditTest, generateTweetTest, generateWeeklyTimesTest, getPredCounts, getReminderStatus, overrideResult, removeUser, sendKnockoutReminder, sendReminderTest, setUserGroup, syncNow, unlockAllUsers, unlockUser, uploadTeamLogo, type ReminderStatus } from "@/lib/adminRepo";
 import { PredictionsClient } from "@/components/predictions/PredictionsClient";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PunditDesk } from "@/components/PunditDesk";
@@ -181,13 +181,37 @@ export function AdminClient() {
     }
   }
 
+  async function runKnockoutReminder(mode: "send" | "test" | "dry") {
+    const key = `ko-${mode}`;
+    setReminderBusy(key);
+    setReminderNote(null);
+    try {
+      const r = await sendKnockoutReminder(mode);
+      if (!r.ok) { setReminderNote(`Failed: ${r.error ?? "unknown error"}`); return; }
+      if (mode === "test") {
+        setReminderNote(`✓ Sent the semi-final reminder to you (${user?.email}). Check your inbox.`);
+      } else if (mode === "dry") {
+        const names = (r.recipients ?? []).map(x => x.teamName).join(", ");
+        setReminderNote(
+          `${r.count ?? 0} reopened player(s) would get the semi-final email${names ? `: ${names}` : " — nobody is reopened."}`,
+        );
+      } else {
+        setReminderNote(`✓ Sent semi-final reminder to ${r.sent ?? 0}/${r.count ?? 0} reopened player(s).`);
+      }
+    } catch {
+      setReminderNote("Request failed.");
+    } finally {
+      setReminderBusy(null);
+    }
+  }
+
   async function handleUnlock(uid: string, teamName: string) {
-    if (!window.confirm(`Unlock ${teamName}'s knockout picks only? Group picks stay locked.`)) return;
+    if (!window.confirm(`Re-open ${teamName}'s semi-final picks only? Group picks stay locked.`)) return;
     setUnlockingUid(uid);
     try {
       const r = await unlockUser(uid);
       if (r.ok) {
-        flash(`✓ Unlocked knockout picks for ${teamName}`);
+        flash(`✓ Re-opened semi-final picks for ${teamName}`);
       } else {
         flash(`Failed: ${r.error ?? "unknown error"}`);
       }
@@ -203,7 +227,7 @@ export function AdminClient() {
       flash("No locked players found.");
       return;
     }
-    if (!window.confirm(`Unlock knockout picks for all ${lockedUsers.length} locked player(s)? Group picks stay locked.`)) return;
+    if (!window.confirm(`Re-open semi-final picks for all ${lockedUsers.length} locked player(s)? Group picks stay locked.`)) return;
     setUnlockingAll(true);
     try {
       const r = await unlockAllUsers();
@@ -212,7 +236,7 @@ export function AdminClient() {
         return;
       }
       const scannedNote = typeof r.users === "number" ? ` (${r.users} total users scanned)` : "";
-      flash(`✓ Unlocked knockout picks for ${lockedUsers.length} player(s)${scannedNote}`);
+      flash(`✓ Re-opened semi-final picks for ${lockedUsers.length} player(s)${scannedNote}`);
     } finally {
       setUnlockingAll(false);
     }
@@ -272,6 +296,17 @@ export function AdminClient() {
           </button>
           <button className="btn-ghost" disabled={reminderBusy !== null} onClick={() => runReminderTest("4h", "dry")}>
             {reminderBusy === "4h-dry" ? "Checking…" : "Preview recipients (no send)"}
+          </button>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button className="btn-primary" disabled={reminderBusy !== null} onClick={() => runKnockoutReminder("test")}>
+            {reminderBusy === "ko-test" ? "Sending…" : "Send me the semi-final email"}
+          </button>
+          <button className="btn-ghost" disabled={reminderBusy !== null} onClick={() => runKnockoutReminder("dry")}>
+            {reminderBusy === "ko-dry" ? "Checking…" : "Preview reopened players"}
+          </button>
+          <button className="btn-ghost" disabled={reminderBusy !== null} onClick={() => runKnockoutReminder("send")}>
+            {reminderBusy === "ko-send" ? "Sending…" : "Send semi-final email to reopened players"}
           </button>
         </div>
         {reminderStatus && (
@@ -560,8 +595,8 @@ export function AdminClient() {
       <section className="card p-4">
         <h2 className="mb-3 font-semibold">Prediction status</h2>
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Match predictions each player has submitted, and whether they&apos;ve locked in. Unlock only
-          knockout picks for locked players while keeping group-stage picks locked in place.
+          Match predictions each player has submitted, and whether they&apos;ve locked in. Re-open
+          semi-final knockout picks for locked players while keeping group-stage picks locked in place.
         </p>
         <div className="mb-3 flex justify-end">
           <button
@@ -569,7 +604,7 @@ export function AdminClient() {
             onClick={handleUnlockAll}
             disabled={unlockingAll}
           >
-            {unlockingAll ? "Unlocking all…" : "🔓 Unlock knockout picks (all locked players)"}
+            {unlockingAll ? "Unlocking all…" : "🔓 Re-open semi-final picks (all locked players)"}
           </button>
         </div>
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
@@ -607,9 +642,9 @@ export function AdminClient() {
                             onClick={() => handleUnlock(u.uid, u.teamName)}
                             disabled={unlockingAll || unlockingUid === u.uid}
                             className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
-                            title="Unlock knockout picks only"
+                            title="Re-open semi-final picks only"
                           >
-                            {unlockingUid === u.uid ? "Unlocking…" : "🔓 Unlock Knockout"}
+                            {unlockingUid === u.uid ? "Unlocking…" : "🔓 Re-open Semis"}
                           </button>
                         ) : (
                           <span className="text-xs text-[var(--muted)]">Open</span>

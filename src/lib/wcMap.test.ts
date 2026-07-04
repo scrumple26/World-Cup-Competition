@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { normalizeGroupLabel, toGroupStandings } from "./wcMap";
+import { isLocked, normalizeGroupLabel, toGroupStandings } from "./wcMap";
 import type { ApiStandingRow } from "./apiFootball";
+import type { WcMatch } from "./types";
 
 describe("normalizeGroupLabel", () => {
   it("canonicalizes API-Football's 'Group Stage - Group X' to 'Group X'", () => {
@@ -42,5 +43,30 @@ describe("toGroupStandings", () => {
 
   it("returns empty when the API yields no standings", () => {
     expect(toGroupStandings([])).toEqual([]);
+  });
+});
+
+describe("isLocked", () => {
+  const futureKickoff = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const baseMatch: WcMatch = {
+    id: 1,
+    round: "Semi-finals",
+    kickoff: futureKickoff,
+    status: "NS",
+    homeTeamId: 1,
+    awayTeamId: 2,
+    homeTeamName: "Home",
+    awayTeamName: "Away",
+    homeLogo: "",
+    awayLogo: "",
+    goals: { home: null, away: null },
+  };
+
+  it("keeps not-started TBD fixtures editable before kickoff", () => {
+    expect(isLocked({ ...baseMatch, status: "TBD" })).toBe(false);
+  });
+
+  it("locks live fixtures", () => {
+    expect(isLocked({ ...baseMatch, status: "1H" })).toBe(true);
   });
 });
