@@ -48,19 +48,33 @@ export async function POST(req: NextRequest) {
 
   // Determine which fixtures are knockout rounds by checking wcMatches
   const wcSnap = await db.collection("wcMatches").get();
-  const knockoutIds = new Set<number>();
+  const knockoutById = new Map<number, string>();
   for (const d of wcSnap.docs) {
     const m = d.data() as { id?: number; round?: string };
     if (typeof m.id === "number" && typeof m.round === "string" && !isGroupRound(m.round)) {
-      knockoutIds.add(m.id);
+      knockoutById.set(m.id, m.round);
     }
   }
 
   // Only save knockout predictions (ignore any group-stage fixtures in the payload)
-  if (knockoutIds.size === 0) {
+  if (knockoutById.size === 0) {
     return NextResponse.json({ error: "No knockout fixtures found — cannot lock in knockout picks." }, { status: 500 });
   }
-  const knockoutPredictions = predictions.filter((p) => knockoutIds.has(p.fixtureId));
+  const knockoutPredictions = predictions.filter((p) => knockoutById.has(p.fixtureId));
+
+  const missingTieWinners = knockoutPredictions.filter(
+    (p) => p.home === p.away && p.predictedWinner !== "home" && p.predictedWinner !== "away",
+  );
+  if (missingTieWinners.length > 0) {
+    const round = knockoutById.get(missingTieWinners[0].fixtureId) ?? "knockout";
+    return NextResponse.json(
+      {
+        error: `Draw predicted in ${round}. Pick a winner for ties (penalties/shootout) before locking in.`,
+        missingTieWinnerFixtureIds: missingTieWinners.map((p) => p.fixtureId),
+      },
+      { status: 400 },
+    );
+  }
 
   // Batch write knockout predictions
   const BATCH_SIZE = 400;

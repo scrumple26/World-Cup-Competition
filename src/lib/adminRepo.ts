@@ -217,6 +217,32 @@ export async function sendReminderTest(
   return { ok: res.ok, error: data.error, sent: data.sent, count: data.count, recipients: data.recipients };
 }
 
+export async function sendKnockoutReminder(
+  mode: "send" | "test" | "dry" = "send",
+): Promise<ReminderTestResult> {
+  if (USE_MOCK) return { ok: true };
+  const token = await adminToken();
+  const res = await fetch("/api/reminders/knockout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer ".concat(token ?? "") },
+    body: JSON.stringify({ mode }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    sent?: number;
+    count?: number;
+    candidates?: number;
+    recipients?: { email: string; firstName: string; teamName: string }[];
+  };
+  return {
+    ok: res.ok,
+    error: data.error,
+    sent: data.sent,
+    count: data.count ?? data.candidates,
+    recipients: data.recipients,
+  };
+}
+
 export interface ReminderPhaseState { at: number; candidates: number; sent: number; failed: number; }
 export interface ReminderStatus { sent4h?: ReminderPhaseState; sent1h?: ReminderPhaseState; }
 

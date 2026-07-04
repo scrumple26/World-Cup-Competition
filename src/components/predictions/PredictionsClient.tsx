@@ -271,9 +271,9 @@ export function PredictionsClient({
           />
           {isKnockoutUnlocked && !isAdmin && (
             <div className="card p-5 space-y-3">
-              <div className="font-semibold">Lock in knockout picks</div>
+              <div className="font-semibold">Submit semi-final picks</div>
               <p className="text-sm text-[var(--muted)]">
-                Your group picks are locked in. Enter your knockout predictions above, then lock them in when you&apos;re ready.
+                Semi-final picks are open again. Enter your knockout predictions above and, for any draw, pick the shootout winner before submitting.
               </p>
               {lockKnockoutError && (
                 <p className="text-sm text-red-400">{lockKnockoutError}</p>
@@ -283,7 +283,7 @@ export function PredictionsClient({
                 disabled={lockingKnockout}
                 className="btn-primary px-6"
               >
-                {lockingKnockout ? "Locking in…" : "🔒 Lock In Knockout Picks"}
+                {lockingKnockout ? "Submitting…" : "✅ Submit Semi-final Picks"}
               </button>
             </div>
           )}
