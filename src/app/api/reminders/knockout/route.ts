@@ -1,11 +1,16 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
+import type { Firestore } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireAdmin } from "@/lib/firebase/requireAdmin";
 import { ADMIN_EMAIL } from "@/lib/config";
+import { isGroupRound } from "@/lib/wc";
+import { isLocked } from "@/lib/wcMap";
+import type { UserProfile, WcMatch, MatchPrediction } from "@/lib/types";
 import {
   sendKnockoutRoundOpenEmail,
   sendKnockoutPickReminderEmail,
+  sendSemifinalPicksReminderEmail,
 } from "@/lib/email";
 import {
   loadKnockoutSnapshot,
@@ -44,7 +49,7 @@ function resolveRecipients(snap: KnockoutSnapshot, uids: string[]): Recipient[] 
   return out;
 }
 
-async function run(req: NextRequest, opts: { mode: Mode; force: boolean }) {
+async function runSurvivorReminders(opts: { mode: Mode; force: boolean }) {
   const { mode, force } = opts;
   const db = getAdminDb();
   if (!db) return NextResponse.json({ error: "not configured" }, { status: 503 });
@@ -167,6 +172,92 @@ async function run(req: NextRequest, opts: { mode: Mode; force: boolean }) {
   return NextResponse.json({ ok: true, mode, results, skipped: plan.skipped });
 }
 
+/**
+ * Real users who still need to submit Finals picks. The window auto-opens while
+ * any knockout fixture has yet to kick off (see lock-in-knockout), so the
+ * audience is everyone missing a locked-in pick on an open knockout fixture —
+ * not just players holding the legacy `knockoutUnlock` marker, which the
+ * auto-open flow no longer creates.
+ */
+async function getFinalsReminderRecipients(db: Firestore): Promise<UserProfile[]> {
+  const [wcSnap, usersSnap] = await Promise.all([
+    db.collection("wcMatches").get(),
+    db.collection("users").get(),
+  ]);
+  const wcMatches = wcSnap.docs.map((d) => d.data() as WcMatch);
+  const real = usersSnap.docs
+    .map((d) => d.data() as UserProfile)
+    .filter((u) => !u.isBot && typeof u.email === "string" && u.email.includes("@"));
+  if (real.length === 0) return [];
+
+  const now = Date.now();
+  const openKoIds = wcMatches
+    .filter((m) => !isGroupRound(m.round) && !isLocked(m, now))
+    .map((m) => m.id);
+
+  // A manual admin re-open still counts, even outside the auto-open window.
+  const unlockSnaps = await db.getAll(
+    ...real.map((u) =>
+      db.collection("predictions").doc(u.uid).collection("meta").doc("knockoutUnlock"),
+    ),
+  );
+  const manuallyUnlocked = new Set<string>();
+  unlockSnaps.forEach((s, i) => {
+    if (s.exists) manuallyUnlocked.add(real[i].uid);
+  });
+
+  if (openKoIds.length === 0) {
+    return real.filter((u) => manuallyUnlocked.has(u.uid));
+  }
+
+  const pickRefs = real.flatMap((u) =>
+    openKoIds.map((id) =>
+      db.collection("predictions").doc(u.uid).collection("matches").doc(String(id)),
+    ),
+  );
+  const pickSnaps = await db.getAll(...pickRefs);
+  const needsSubmit = new Set<string>();
+  real.forEach((u, i) => {
+    const slice = pickSnaps.slice(i * openKoIds.length, (i + 1) * openKoIds.length);
+    const allLockedIn = slice.every(
+      (s) => s.exists && (s.data() as MatchPrediction).userLocked === true,
+    );
+    if (!allLockedIn) needsSubmit.add(u.uid);
+  });
+
+  return real.filter((u) => needsSubmit.has(u.uid) || manuallyUnlocked.has(u.uid));
+}
+
+async function runFinalsBroadcast(mode: Mode) {
+  const db = getAdminDb();
+  if (!db) return NextResponse.json({ error: "not configured" }, { status: 503 });
+
+  const list = await getFinalsReminderRecipients(db);
+  if (mode === "dry") {
+    return NextResponse.json({
+      ok: true,
+      dryRun: true,
+      count: list.length,
+      recipients: list.map((u) => ({ email: u.email, firstName: u.firstName, teamName: u.teamName })),
+    });
+  }
+
+  const targets: Array<{ email: string; firstName: string }> =
+    mode === "test"
+      ? [{ email: ADMIN_EMAIL, firstName: "Admin" }]
+      : list.map((u) => ({ email: u.email, firstName: u.firstName }));
+
+  let sent = 0;
+  const failures: Array<{ email: string; error: string }> = [];
+  for (const t of targets) {
+    const r = await sendSemifinalPicksReminderEmail(t.email, t.firstName);
+    if (r.ok) sent++;
+    else failures.push({ email: t.email, error: r.error ?? "unknown" });
+  }
+
+  return NextResponse.json({ ok: true, mode, candidates: list.length, sent, failures });
+}
+
 async function authorize(
   req: NextRequest,
 ): Promise<{ isCron: boolean; ok: boolean }> {
@@ -179,7 +270,7 @@ async function authorize(
 }
 
 /**
- * GET /api/reminders/knockout
+ * GET /api/reminders/knockout — survivor bracket-round reminders.
  *   - Vercel Cron (Authorization: Bearer CRON_SECRET) → evaluates every round and
  *     sends whatever is due (round-open + 2h reminders), idempotent per phase.
  *   - Admin (Firebase ID token) → &mode=dry (plan only), &mode=test (send each
@@ -201,15 +292,18 @@ export async function GET(req: NextRequest) {
   const mode: Mode =
     !isCron && (modeParam === "dry" || modeParam === "test") ? (modeParam as Mode) : "send";
   const force = !isCron && req.nextUrl.searchParams.get("force") === "1";
-  return run(req, { mode, force });
+  return runSurvivorReminders({ mode, force });
 }
 
-/** POST /api/reminders/knockout (admin) — body: { mode?, force? }. */
+/**
+ * POST /api/reminders/knockout (admin only) — "Finals picks are open" broadcast,
+ * driven by the admin panel. Body: { mode?: "send"|"test"|"dry" }.
+ */
 export async function POST(req: NextRequest) {
   const admin = await requireAdmin(req);
   if (!admin) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const body = (await req.json().catch(() => ({}))) as { mode?: Mode; force?: boolean };
+  const body = (await req.json().catch(() => ({}))) as { mode?: Mode };
   const mode: Mode = body.mode === "test" || body.mode === "dry" ? body.mode : "send";
-  return run(req, { mode, force: !!body.force });
+  return runFinalsBroadcast(mode);
 }

@@ -69,6 +69,9 @@ export function usePredictions(
   groups: GroupBundle[],
   deadline?: string | null,
   syncDrafts = true,
+  /** When true, knockout ("Finals") picks are open without an admin unlock —
+   *  driven by whether upcoming knockout fixtures exist. */
+  knockoutOpen = false,
 ) {
   const [matches,    setMatches]    = useState<Record<number, MatchPrediction>>({});
   const [groupOrders,setGroupOrders] = useState<Record<string, number[]>>({});
@@ -100,6 +103,10 @@ export function usePredictions(
 
   // isLocked = manually locked in OR deadline has passed
   const isLocked = isUserLocked || isPastDeadline;
+
+  // Knockout ("Finals") picks are editable when an admin unlocked them OR while
+  // the knockout window is open (upcoming knockout fixtures still to kick off).
+  const knockoutUnlocked = isKnockoutUnlocked || knockoutOpen;
 
   // saveStates kept for API compatibility with MatchPredictionCard
   const saveStates: Record<number, SaveState> = useMemo(() => ({}), []);
@@ -220,7 +227,7 @@ export function usePredictions(
       allowWhenUserLocked = false,
     ) => {
       if (!uid || isPastDeadline) return;
-      const canEditWhenLocked = allowWhenUserLocked && isKnockoutUnlocked;
+      const canEditWhenLocked = allowWhenUserLocked && knockoutUnlocked;
       if (isUserLocked && !canEditWhenLocked) return;
       const pred: MatchPrediction = {
         fixtureId,
@@ -236,7 +243,7 @@ export function usePredictions(
         return next;
       });
     },
-    [uid, isUserLocked, isKnockoutUnlocked, isPastDeadline],
+    [uid, isUserLocked, knockoutUnlocked, isPastDeadline],
   );
 
   const setOrder = useCallback(
@@ -354,7 +361,7 @@ export function usePredictions(
   // ---- lockInKnockout — saves knockout picks and re-locks the knockout stage ----
 
   const lockInKnockout = useCallback(async () => {
-    if (!uid || lockingKnockout || !isKnockoutUnlocked) return;
+    if (!uid || lockingKnockout || !knockoutUnlocked) return;
     setLockingKnockout(true);
     setLockKnockoutError(null);
     try {
@@ -381,7 +388,7 @@ export function usePredictions(
     } finally {
       setLockingKnockout(false);
     }
-  }, [uid, matches, lockingKnockout, isKnockoutUnlocked]);
+  }, [uid, matches, lockingKnockout, knockoutUnlocked]);
 
   // No auto-lock at the deadline: locking in is an explicit, all-at-once action.
   // The deadline is a hard lockout (enforced server-side too) — anyone who has
@@ -427,7 +434,7 @@ export function usePredictions(
     lockIn,
     lockInKnockout,
     isUserLocked,
-    isKnockoutUnlocked,
+    isKnockoutUnlocked: knockoutUnlocked,
     isPastDeadline,
     isLocked,
     locking,

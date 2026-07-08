@@ -89,21 +89,34 @@ export function KnockoutPredictions({
                 (after the group stage finishes).
               </p>
             ) : (
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {fixtures.map((m) => {
-                  const p = matches[m.id];
+              <div className="mt-2 space-y-3">
+                {wcRounds.map((round) => {
+                  const byRound = fixtures.filter((m) => m.round === round);
+                  if (byRound.length === 0) return null;
                   return (
-                    <MatchPredictionCard
-                      key={m.id}
-                      match={m}
-                      home={p ? p.home : null}
-                      away={p ? p.away : null}
-                      locked={isLocked(m)}
-                      saveState={saveStates[m.id]}
-                      isKnockout
-                      predictedWinner={p?.predictedWinner}
-                      onChange={(h, a, winner) => onMatchChange(m.id, h, a, winner)}
-                    />
+                    <div key={round}>
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
+                        {round} matchups
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {byRound.map((m) => {
+                          const p = matches[m.id];
+                          return (
+                            <MatchPredictionCard
+                              key={m.id}
+                              match={m}
+                              home={p ? p.home : null}
+                              away={p ? p.away : null}
+                              locked={isLocked(m)}
+                              saveState={saveStates[m.id]}
+                              isKnockout
+                              predictedWinner={p?.predictedWinner}
+                              onChange={(h, a, winner) => onMatchChange(m.id, h, a, winner)}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>

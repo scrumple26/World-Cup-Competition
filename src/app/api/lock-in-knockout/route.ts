@@ -2,7 +2,8 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { isGroupRound } from "@/lib/wc";
-import type { MatchPrediction } from "@/lib/types";
+import { hasOpenKnockoutFixtures } from "@/lib/wcMap";
+import type { MatchPrediction, WcMatch } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -28,15 +29,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  // Verify the user is actually knockout-unlocked
   const predRef = db.collection("predictions").doc(uid);
-  const koUnlockSnap = await predRef.collection("meta").doc("knockoutUnlock").get();
-  if (!koUnlockSnap.exists) {
-    return NextResponse.json(
-      { error: "Knockout picks are not unlocked for this user." },
-      { status: 403 },
-    );
-  }
 
   const { predictions } = (await req.json().catch(() => ({}))) as {
     predictions?: MatchPrediction[];
@@ -46,21 +39,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "predictions array required" }, { status: 400 });
   }
 
-  // Determine which fixtures are knockout rounds by checking wcMatches
+  // Load knockout fixtures — used both to gate submission and to filter the payload.
   const wcSnap = await db.collection("wcMatches").get();
-  const knockoutIds = new Set<number>();
-  for (const d of wcSnap.docs) {
-    const m = d.data() as { id?: number; round?: string };
+  const wcMatches = wcSnap.docs.map((d) => d.data() as WcMatch);
+  const knockoutById = new Map<number, string>();
+  for (const m of wcMatches) {
     if (typeof m.id === "number" && typeof m.round === "string" && !isGroupRound(m.round)) {
-      knockoutIds.add(m.id);
+      knockoutById.set(m.id, m.round);
     }
   }
 
   // Only save knockout predictions (ignore any group-stage fixtures in the payload)
-  if (knockoutIds.size === 0) {
+  if (knockoutById.size === 0) {
     return NextResponse.json({ error: "No knockout fixtures found — cannot lock in knockout picks." }, { status: 500 });
   }
-  const knockoutPredictions = predictions.filter((p) => knockoutIds.has(p.fixtureId));
+
+  // The Finals picks window is open while any knockout fixture is still to kick
+  // off. Also honour a legacy admin unlock marker if one is present.
+  const koUnlockSnap = await predRef.collection("meta").doc("knockoutUnlock").get();
+  if (!hasOpenKnockoutFixtures(wcMatches) && !koUnlockSnap.exists) {
+    return NextResponse.json(
+      { error: "Finals picks are closed — all knockout matches have kicked off." },
+      { status: 403 },
+    );
+  }
+  const knockoutPredictions = predictions.filter((p) => knockoutById.has(p.fixtureId));
+
+  const missingTieWinners = knockoutPredictions.filter(
+    (p) =>
+      typeof p.home === "number" &&
+      typeof p.away === "number" &&
+      p.home === p.away &&
+      p.predictedWinner !== "home" &&
+      p.predictedWinner !== "away",
+  );
+  if (missingTieWinners.length > 0) {
+    const round = knockoutById.get(missingTieWinners[0].fixtureId) ?? "knockout";
+    return NextResponse.json(
+      {
+        error: `Draw predicted in ${round}. Pick a winner for ties (penalties/shootout) before submitting.`,
+        missingTieWinnerFixtureIds: missingTieWinners.map((p) => p.fixtureId),
+      },
+      { status: 400 },
+    );
+  }
 
   // Batch write knockout predictions
   const BATCH_SIZE = 400;
@@ -76,7 +98,8 @@ export async function POST(req: NextRequest) {
     await batch.commit();
   }
 
-  // Remove the knockoutUnlock doc — user's knockout picks are now locked in again
+  // Clear any manual admin unlock marker (no-op if absent). While the Finals
+  // window is open, picks stay editable; each match still locks at its kickoff.
   await predRef.collection("meta").doc("knockoutUnlock").delete();
 
   return NextResponse.json({ ok: true, count: knockoutPredictions.length });

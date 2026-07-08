@@ -139,6 +139,42 @@ export async function sendPredictionReminderEmail(
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
+/** Reminder that Finals (knockout) picks are open. */
+export async function sendSemifinalPicksReminderEmail(
+  toEmail: string,
+  firstName: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) return { ok: false, error: "Resend not configured" };
+
+  const name = (firstName ?? "").trim() || "there";
+  const subject = "⚽ Finals picks are open — submit now";
+  const html = baseTemplate(
+    "Finals picks are open",
+    `<p>Hi ${name},</p>
+     <p>Your knockout predictions are open for the <strong>Finals</strong> — Quarter-finals, Semi-finals &amp; the Final.</p>
+     <p>If you predict a draw score, that means the match goes to a shootout — you must also pick who wins.</p>
+     <p><a href="${PREDICT_URL}" class="btn">Submit my Finals picks →</a></p>
+     <p>Good luck!</p>
+     <p>Thanks,<br/><strong>The Global Football Cup Federation</strong></p>`,
+  );
+  const text =
+    `WC 2026 Competition\n\nFinals picks are open\n\nHi ${name},\n\n` +
+    "Your knockout predictions are open for the Finals — Quarter-finals, Semi-finals & the Final.\n" +
+    "If you predict a draw score, you must also pick the shootout winner.\n\n" +
+    `Submit now: ${PREDICT_URL}\n\nThanks,\nThe Global Football Cup Federation\nglobalfootballcup.com`;
+
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject,
+    text,
+    html,
+  });
+
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 /**
  * Notify the admin that a new player has completed sign-up.
  * Sent to ADMIN_EMAIL when a profile is created (i.e. after email verification).
