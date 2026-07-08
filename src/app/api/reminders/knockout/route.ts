@@ -220,7 +220,9 @@ async function getFinalsReminderRecipients(db: Firestore): Promise<UserProfile[]
   real.forEach((u, i) => {
     const slice = pickSnaps.slice(i * openKoIds.length, (i + 1) * openKoIds.length);
     const allLockedIn = slice.every(
-      (s) => s.exists && (s.data() as MatchPrediction).userLocked === true,
+      (s) =>
+        s.exists &&
+        (s.data() as MatchPrediction & { userLocked?: boolean }).userLocked === true,
     );
     if (!allLockedIn) needsSubmit.add(u.uid);
   });
