@@ -2,6 +2,7 @@
 
 import type { ApiFixture, ApiStandingRow } from "./apiFootball";
 import type { WcMatch } from "./types";
+import { isGroupRound } from "./wc";
 const LOCKED_MATCH_STATUSES = new Set(["FT", "AET", "PEN", "1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
 
 /** A WC group standings table for one group (e.g. "Group A"). */
@@ -92,4 +93,14 @@ export function isLocked(m: WcMatch, now = Date.now()): boolean {
   const kickoffPassed = new Date(m.kickoff).getTime() <= now;
   if (kickoffPassed) return true;
   return LOCKED_MATCH_STATUSES.has(m.status);
+}
+
+/**
+ * True while the knockout ("Finals") picks window is open: any knockout
+ * fixture (QF/SF/Final and earlier KO rounds) whose kickoff hasn't passed yet.
+ * Finals picks stay open until each match kicks off; individual matches still
+ * lock one-by-one via {@link isLocked}.
+ */
+export function hasOpenKnockoutFixtures(matches: WcMatch[], now = Date.now()): boolean {
+  return matches.some((m) => !isGroupRound(m.round) && !isLocked(m, now));
 }

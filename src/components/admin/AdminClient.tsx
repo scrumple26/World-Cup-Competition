@@ -189,14 +189,14 @@ export function AdminClient() {
       const r = await sendKnockoutReminder(mode);
       if (!r.ok) { setReminderNote(`Failed: ${r.error ?? "unknown error"}`); return; }
       if (mode === "test") {
-        setReminderNote(`✓ Sent the semi-final reminder to you (${user?.email}). Check your inbox.`);
+        setReminderNote(`✓ Sent the Finals reminder to you (${user?.email}). Check your inbox.`);
       } else if (mode === "dry") {
         const names = (r.recipients ?? []).map(x => x.teamName).join(", ");
         setReminderNote(
-          `${r.count ?? 0} reopened player(s) would get the semi-final email${names ? `: ${names}` : " — nobody is reopened."}`,
+          `${r.count ?? 0} reopened player(s) would get the Finals email${names ? `: ${names}` : " — nobody is reopened."}`,
         );
       } else {
-        setReminderNote(`✓ Sent semi-final reminder to ${r.sent ?? 0}/${r.count ?? 0} reopened player(s).`);
+        setReminderNote(`✓ Sent Finals reminder to ${r.sent ?? 0}/${r.count ?? 0} reopened player(s).`);
       }
     } catch {
       setReminderNote("Request failed.");
@@ -206,12 +206,12 @@ export function AdminClient() {
   }
 
   async function handleUnlock(uid: string, teamName: string) {
-    if (!window.confirm(`Re-open ${teamName}'s semi-final picks only? Group picks stay locked.`)) return;
+    if (!window.confirm(`Re-open ${teamName}'s Finals (knockout) picks only? Group picks stay locked.`)) return;
     setUnlockingUid(uid);
     try {
       const r = await unlockUser(uid);
       if (r.ok) {
-        flash(`✓ Re-opened semi-final picks for ${teamName}`);
+        flash(`✓ Re-opened Finals picks for ${teamName}`);
       } else {
         flash(`Failed: ${r.error ?? "unknown error"}`);
       }
@@ -227,7 +227,7 @@ export function AdminClient() {
       flash("No locked players found.");
       return;
     }
-    if (!window.confirm(`Re-open semi-final picks for all ${lockedUsers.length} locked player(s)? Group picks stay locked.`)) return;
+    if (!window.confirm(`Re-open Finals (knockout) picks for all ${lockedUsers.length} locked player(s)? Group picks stay locked.`)) return;
     setUnlockingAll(true);
     try {
       const r = await unlockAllUsers();
@@ -236,7 +236,7 @@ export function AdminClient() {
         return;
       }
       const scannedNote = typeof r.users === "number" ? ` (${r.users} total users scanned)` : "";
-      flash(`✓ Re-opened semi-final picks for ${lockedUsers.length} player(s)${scannedNote}`);
+      flash(`✓ Re-opened Finals picks for ${lockedUsers.length} player(s)${scannedNote}`);
     } finally {
       setUnlockingAll(false);
     }
@@ -300,13 +300,13 @@ export function AdminClient() {
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button className="btn-primary" disabled={reminderBusy !== null} onClick={() => runKnockoutReminder("test")}>
-            {reminderBusy === "ko-test" ? "Sending…" : "Send me the semi-final email"}
+            {reminderBusy === "ko-test" ? "Sending…" : "Send me the Finals email"}
           </button>
           <button className="btn-ghost" disabled={reminderBusy !== null} onClick={() => runKnockoutReminder("dry")}>
             {reminderBusy === "ko-dry" ? "Checking…" : "Preview reopened players"}
           </button>
           <button className="btn-ghost" disabled={reminderBusy !== null} onClick={() => runKnockoutReminder("send")}>
-            {reminderBusy === "ko-send" ? "Sending…" : "Send semi-final email to reopened players"}
+            {reminderBusy === "ko-send" ? "Sending…" : "Send Finals email to reopened players"}
           </button>
         </div>
         {reminderStatus && (
@@ -595,8 +595,9 @@ export function AdminClient() {
       <section className="card p-4">
         <h2 className="mb-3 font-semibold">Prediction status</h2>
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Match predictions each player has submitted, and whether they&apos;ve locked in. Re-open
-          semi-final knockout picks for locked players while keeping group-stage picks locked in place.
+          Match predictions each player has submitted, and whether they&apos;ve locked in. Finals
+          picks (Quarter-finals → Final) auto-open while those matches are still to kick off; use this
+          to manually re-open a locked player&apos;s knockout picks, keeping group-stage picks in place.
         </p>
         <div className="mb-3 flex justify-end">
           <button
@@ -604,7 +605,7 @@ export function AdminClient() {
             onClick={handleUnlockAll}
             disabled={unlockingAll}
           >
-            {unlockingAll ? "Unlocking all…" : "🔓 Re-open semi-final picks (all locked players)"}
+            {unlockingAll ? "Opening all…" : "🔓 Open Finals picks (all locked players)"}
           </button>
         </div>
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
@@ -642,9 +643,9 @@ export function AdminClient() {
                             onClick={() => handleUnlock(u.uid, u.teamName)}
                             disabled={unlockingAll || unlockingUid === u.uid}
                             className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
-                            title="Re-open semi-final picks only"
+                            title="Re-open Finals (knockout) picks only"
                           >
-                            {unlockingUid === u.uid ? "Unlocking…" : "🔓 Re-open Semis"}
+                            {unlockingUid === u.uid ? "Opening…" : "🔓 Open Finals"}
                           </button>
                         ) : (
                           <span className="text-xs text-[var(--muted)]">Open</span>

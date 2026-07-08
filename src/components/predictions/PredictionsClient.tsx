@@ -11,6 +11,7 @@ import { KnockoutPredictions } from "./KnockoutPredictions";
 import type { MatchPrediction, WcMatch } from "@/lib/types";
 import { PICK_DEADLINE_ISO } from "@/lib/config";
 import { competitionStage } from "@/lib/wc";
+import { hasOpenKnockoutFixtures } from "@/lib/wcMap";
 
 const CT = "America/Chicago";
 
@@ -117,6 +118,13 @@ export function PredictionsClient({
   // any time up to here; games that kicked off before your lock-in score 0.
   const deadline = PICK_DEADLINE_ISO;
 
+  // Finals picks (WC Quarter-finals → Final) auto-open while any knockout
+  // fixture is still to kick off — no admin unlock needed.
+  const knockoutOpen = useMemo(
+    () => (data ? hasOpenKnockoutFixtures(data.fixtures) : false),
+    [data],
+  );
+
   const {
     loaded,
     matches,
@@ -141,7 +149,7 @@ export function PredictionsClient({
     lockError,
     lockKnockoutError,
     pendingCount,
-  } = usePredictions(targetUid, groups, deadline, !actAs);
+  } = usePredictions(targetUid, groups, deadline, !actAs, knockoutOpen);
 
   // Compute the best 8 third-place teams from predicted match scores
   const autoThirdPlace = useMemo(() => {
@@ -231,7 +239,7 @@ export function PredictionsClient({
           <span className="ml-2 text-[var(--muted)]">
             {isUserLocked
               ? (isKnockoutUnlocked
-                ? "Your group picks are locked, but knockout picks are unlocked for editing."
+                ? "Your group picks are locked, but Finals picks (Quarter-finals → Final) are open for editing."
                 : "Your picks are submitted.")
               : "The deadline has passed — picks that were never locked in were not submitted and score 0."}
           </span>
@@ -271,9 +279,9 @@ export function PredictionsClient({
           />
           {isKnockoutUnlocked && !isAdmin && (
             <div className="card p-5 space-y-3">
-              <div className="font-semibold">Submit semi-final picks</div>
+              <div className="font-semibold">Submit Finals picks</div>
               <p className="text-sm text-[var(--muted)]">
-                Semi-final picks are open again. Enter your knockout predictions above and, for any draw, pick the shootout winner before submitting.
+                Finals picks (Quarter-finals, Semi-finals &amp; Final) are open. Enter your knockout predictions above and, for any draw, pick the shootout winner before submitting.
               </p>
               {lockKnockoutError && (
                 <p className="text-sm text-red-400">{lockKnockoutError}</p>
@@ -283,7 +291,7 @@ export function PredictionsClient({
                 disabled={lockingKnockout}
                 className="btn-primary px-6"
               >
-                {lockingKnockout ? "Submitting…" : "✅ Submit Semi-final Picks"}
+                {lockingKnockout ? "Submitting…" : "✅ Submit Finals Picks"}
               </button>
             </div>
           )}
