@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hasOpenKnockoutFixtures, isLocked, normalizeGroupLabel, toGroupStandings } from "./wcMap";
+import { hasOpenKnockoutFixtures, isKnockoutPickEditable, isLocked, normalizeGroupLabel, toGroupStandings } from "./wcMap";
 import type { ApiStandingRow } from "./apiFootball";
 import type { WcMatch } from "./types";
 
@@ -104,5 +104,41 @@ describe("hasOpenKnockoutFixtures", () => {
         mk({ id: 2, round: "Final", kickoff: future, status: "NS" }),
       ]),
     ).toBe(true);
+  });
+});
+
+describe("isKnockoutPickEditable", () => {
+  const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const mk = (over: Partial<WcMatch>): WcMatch => ({
+    id: 1, round: "Semi-finals", kickoff: future, status: "NS",
+    homeTeamId: 1, awayTeamId: 2, homeTeamName: "H", awayTeamName: "A",
+    homeLogo: "", awayLogo: "", goals: { home: null, away: null }, ...over,
+  });
+
+  it("is editable before kickoff without an unlock", () => {
+    expect(isKnockoutPickEditable(mk({}), false)).toBe(true);
+  });
+
+  it("locks at kickoff without an unlock", () => {
+    expect(isKnockoutPickEditable(mk({ kickoff: past, status: "1H" }), false)).toBe(false);
+  });
+
+  it("manual unlock keeps a kicked-off, unfinished match editable", () => {
+    expect(isKnockoutPickEditable(mk({ kickoff: past, status: "1H" }), true)).toBe(true);
+    expect(isKnockoutPickEditable(mk({ kickoff: past, status: "HT" }), true)).toBe(true);
+  });
+
+  it("manual unlock does not reopen a finished match", () => {
+    expect(
+      isKnockoutPickEditable(mk({ kickoff: past, status: "FT", goals: { home: 2, away: 1 } }), true),
+    ).toBe(false);
+    expect(
+      isKnockoutPickEditable(mk({ kickoff: past, status: "PEN", goals: { home: 1, away: 1 } }), true),
+    ).toBe(false);
+  });
+
+  it("never applies to group-stage fixtures", () => {
+    expect(isKnockoutPickEditable(mk({ round: "Group Stage - 1" }), true)).toBe(false);
   });
 });

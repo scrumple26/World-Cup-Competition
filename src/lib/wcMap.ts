@@ -104,3 +104,16 @@ export function isLocked(m: WcMatch, now = Date.now()): boolean {
 export function hasOpenKnockoutFixtures(matches: WcMatch[], now = Date.now()): boolean {
   return matches.some((m) => !isGroupRound(m.round) && !isLocked(m, now));
 }
+
+/**
+ * Whether a user may edit their pick for a knockout fixture.
+ * Normally a pick is editable until kickoff. With a manual admin unlock
+ * (`meta/knockoutUnlock`), it stays editable until the match has a final
+ * result — so an admin can let a player re-enter a pick that failed to save
+ * before kickoff, even once the game is underway.
+ */
+export function isKnockoutPickEditable(m: WcMatch, manualUnlock: boolean, now = Date.now()): boolean {
+  if (isGroupRound(m.round)) return false;
+  if (manualUnlock) return !isPlayed(m);
+  return !isLocked(m, now);
+}

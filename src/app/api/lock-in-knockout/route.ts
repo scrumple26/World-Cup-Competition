@@ -2,7 +2,7 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { isGroupRound } from "@/lib/wc";
-import { hasOpenKnockoutFixtures } from "@/lib/wcMap";
+import { hasOpenKnockoutFixtures, isKnockoutPickEditable } from "@/lib/wcMap";
 import type { MatchPrediction, WcMatch } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -55,15 +55,26 @@ export async function POST(req: NextRequest) {
   }
 
   // The Finals picks window is open while any knockout fixture is still to kick
-  // off. Also honour a legacy admin unlock marker if one is present.
+  // off. A manual admin unlock also opens it, and additionally lets this user
+  // edit fixtures that have kicked off but have no final result yet.
   const koUnlockSnap = await predRef.collection("meta").doc("knockoutUnlock").get();
-  if (!hasOpenKnockoutFixtures(wcMatches) && !koUnlockSnap.exists) {
+  const manualUnlock = koUnlockSnap.exists;
+  if (!hasOpenKnockoutFixtures(wcMatches) && !manualUnlock) {
     return NextResponse.json(
       { error: "Finals picks are closed — all knockout matches have kicked off." },
       { status: 403 },
     );
   }
-  const knockoutPredictions = predictions.filter((p) => knockoutById.has(p.fixtureId));
+
+  // Only accept picks for fixtures the user may still edit. Picks for locked
+  // fixtures are ignored (not validated, never overwritten) — the client
+  // resubmits its full pick set, which includes rounds that already kicked off.
+  const editableIds = new Set(
+    wcMatches.filter((m) => isKnockoutPickEditable(m, manualUnlock)).map((m) => m.id),
+  );
+  const knockoutPredictions = predictions.filter(
+    (p) => knockoutById.has(p.fixtureId) && editableIds.has(p.fixtureId),
+  );
 
   const missingTieWinners = knockoutPredictions.filter(
     (p) =>

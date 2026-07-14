@@ -596,8 +596,10 @@ export function AdminClient() {
         <h2 className="mb-3 font-semibold">Prediction status</h2>
         <p className="mb-3 text-xs text-[var(--muted)]">
           Match predictions each player has submitted, and whether they&apos;ve locked in. Finals
-          picks (Quarter-finals → Final) auto-open while those matches are still to kick off; use this
-          to manually re-open a locked player&apos;s knockout picks, keeping group-stage picks in place.
+          picks (Quarter-finals → Final) auto-open while those matches are still to kick off.
+          &quot;Open Finals&quot; manually re-opens a player&apos;s knockout picks — including matches
+          that already kicked off but haven&apos;t finished (for failed submissions) — keeping
+          group-stage picks in place. The override ends when they resubmit.
         </p>
         <div className="mb-3 flex justify-end">
           <button
@@ -643,7 +645,7 @@ export function AdminClient() {
                             onClick={() => handleUnlock(u.uid, u.teamName)}
                             disabled={unlockingAll || unlockingUid === u.uid}
                             className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
-                            title="Re-open Finals (knockout) picks only"
+                            title="Re-open Finals (knockout) picks only — matches without a final result stay editable even after kickoff"
                           >
                             {unlockingUid === u.uid ? "Opening…" : "🔓 Open Finals"}
                           </button>

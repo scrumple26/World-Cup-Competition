@@ -435,6 +435,9 @@ export function usePredictions(
     lockInKnockout,
     isUserLocked,
     isKnockoutUnlocked: knockoutUnlocked,
+    /** True only for a manual admin unlock (meta/knockoutUnlock), which also
+     *  keeps kicked-off-but-unfinished fixtures editable. */
+    isManualKnockoutUnlock: isKnockoutUnlocked,
     isPastDeadline,
     isLocked,
     locking,

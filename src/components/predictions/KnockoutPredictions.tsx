@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchFixtures } from "@/lib/wcClient";
 import { FRIEND_STAGE_WC_ROUNDS } from "@/lib/wc";
-import { isLocked } from "@/lib/wcMap";
+import { isKnockoutPickEditable } from "@/lib/wcMap";
 import type { MatchPrediction, Outcome, WcMatch } from "@/lib/types";
 import { MatchPredictionCard, type SaveState } from "./MatchPredictionCard";
 
@@ -29,10 +29,13 @@ export function KnockoutPredictions({
   matches,
   saveStates,
   onMatchChange,
+  manualUnlock = false,
 }: {
   matches: Record<number, MatchPrediction>;
   saveStates: Record<number, SaveState>;
   onMatchChange: (fixtureId: number, home: number | null, away: number | null, predictedWinner?: Outcome) => void;
+  /** Admin re-opened this user's Finals picks: fixtures stay editable until they finish, even after kickoff. */
+  manualUnlock?: boolean;
 }) {
   const [byRound, setByRound] = useState<Record<string, WcMatch[]>>({});
   const [loading, setLoading] = useState(true);
@@ -107,7 +110,7 @@ export function KnockoutPredictions({
                               match={m}
                               home={p ? p.home : null}
                               away={p ? p.away : null}
-                              locked={isLocked(m)}
+                              locked={!isKnockoutPickEditable(m, manualUnlock)}
                               saveState={saveStates[m.id]}
                               isKnockout
                               predictedWinner={p?.predictedWinner}

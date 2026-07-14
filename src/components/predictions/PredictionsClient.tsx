@@ -143,6 +143,7 @@ export function PredictionsClient({
     lockInKnockout,
     isUserLocked,
     isKnockoutUnlocked,
+    isManualKnockoutUnlock,
     isLocked,
     locking,
     lockingKnockout,
@@ -276,12 +277,15 @@ export function PredictionsClient({
             saveStates={saveStates}
             onMatchChange={(fixtureId, home, away, predictedWinner) =>
               setMatch(fixtureId, home, away, predictedWinner, true)}
+            manualUnlock={isManualKnockoutUnlock}
           />
           {isKnockoutUnlocked && !isAdmin && (
             <div className="card p-5 space-y-3">
               <div className="font-semibold">Submit Finals picks</div>
               <p className="text-sm text-[var(--muted)]">
-                Finals picks (Quarter-finals, Semi-finals &amp; Final) are open. Enter your knockout predictions above and, for any draw, pick the shootout winner before submitting.
+                {isManualKnockoutUnlock
+                  ? "An admin re-opened your Finals picks — matches without a final result are editable, even if they've kicked off. Enter your predictions above and, for any draw, pick the shootout winner before submitting."
+                  : "Finals picks (Quarter-finals, Semi-finals & Final) are open. Enter your knockout predictions above and, for any draw, pick the shootout winner before submitting."}
               </p>
               {lockKnockoutError && (
                 <p className="text-sm text-red-400">{lockKnockoutError}</p>
