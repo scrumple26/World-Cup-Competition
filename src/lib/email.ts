@@ -1,53 +1,22 @@
 import "server-only";
 import { Resend } from "resend";
 import { ADMIN_EMAIL } from "./config";
+import { ROUND_META, type FriendBracketRound } from "./knockoutReminders";
+import {
+  PREDICT_URL,
+  baseTemplate,
+  knockoutRoundOpenHtml,
+  knockoutRoundOpenText,
+  knockoutPickReminderHtml,
+  knockoutPickReminderText,
+} from "./emailTemplates";
 
 const FROM = "WC 2026 Competition <noreply@globalfootballcup.com>";
-const PREDICT_URL = "https://globalfootballcup.com/predictions";
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
   if (!key) return null;
   return new Resend(key);
-}
-
-function baseTemplate(title: string, bodyHtml: string): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <style>
-    body { margin:0; padding:0; background:#05111f; font-family:system-ui,Arial,sans-serif; color:#eef3fc; }
-    .wrap { max-width:520px; margin:40px auto; padding:0 16px; }
-    .card { background:#0d2040; border:1px solid #1a3560; border-radius:12px; overflow:hidden; }
-    .header { background:#e31837; padding:24px 32px; text-align:center; }
-    .header h1 { margin:0; font-size:20px; font-weight:700; color:#fff; letter-spacing:-.3px; }
-    .header p  { margin:4px 0 0; font-size:13px; color:rgba(255,255,255,.8); }
-    .body { padding:32px; }
-    .body p { margin:0 0 16px; font-size:15px; line-height:1.6; color:#c8d4ee; }
-    .btn { display:inline-block; background:#e31837; color:#fff !important; text-decoration:none;
-           padding:14px 28px; border-radius:8px; font-weight:700; font-size:15px; margin:8px 0 20px; }
-    .footer { padding:20px 32px; border-top:1px solid #1a3560; font-size:12px; color:#7a90b8; }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div style="text-align:center;padding:20px 0 12px"><span style="font-size:32px">🏆</span></div>
-    <div class="card">
-      <div class="header">
-        <h1>World Cup 2026 Competition</h1>
-        <p>${title}</p>
-      </div>
-      <div class="body">${bodyHtml}</div>
-      <div class="footer">
-        Sent by WC 2026 Competition · <a href="https://globalfootballcup.com" style="color:#4ab3ff">globalfootballcup.com</a>
-        <br/>If you didn't request this, you can safely ignore it.
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
 }
 
 export async function sendVerificationEmail(
@@ -234,5 +203,51 @@ export async function sendSignupNotification(profile: {
     ),
   });
 
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Knockout-stage reminders (survivors only — see lib/knockoutReminders.ts)
+// ---------------------------------------------------------------------------
+
+/** Announce to a surviving player that their next bracket round's picks are open. */
+export async function sendKnockoutRoundOpenEmail(
+  toEmail: string,
+  firstName: string,
+  round: FriendBracketRound,
+  kickoffMs?: number | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) return { ok: false, error: "Resend not configured" };
+
+  const { stage } = ROUND_META[round];
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `🏆 Your ${stage} is live — make your picks`,
+    text: knockoutRoundOpenText(firstName, round, kickoffMs),
+    html: knockoutRoundOpenHtml(firstName, round, kickoffMs),
+  });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/** Nudge a surviving player who still hasn't picked, ~2h before their round. */
+export async function sendKnockoutPickReminderEmail(
+  toEmail: string,
+  firstName: string,
+  round: FriendBracketRound,
+  kickoffMs?: number | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) return { ok: false, error: "Resend not configured" };
+
+  const { stage } = ROUND_META[round];
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `🚨 2 hours left — your ${stage} picks aren't in`,
+    text: knockoutPickReminderText(firstName, round, kickoffMs),
+    html: knockoutPickReminderHtml(firstName, round, kickoffMs),
+  });
   return error ? { ok: false, error: error.message } : { ok: true };
 }

@@ -25,6 +25,10 @@
       "schedule": "0 18 * * *"
     },
     {
+      "path": "/api/reminders/knockout",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/buzz",
       "schedule": "*/5 * * * *"
     }

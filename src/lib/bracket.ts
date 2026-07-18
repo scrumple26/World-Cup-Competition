@@ -37,6 +37,40 @@ export interface Bracket {
   final: BracketMatchup;
 }
 
+/** The friends' bracket rounds, matching the keys used across the app. */
+export type FriendBracketRound = "r1" | "sf" | "final";
+
+/**
+ * The players "still in the contest" heading INTO a given bracket round — i.e.
+ * everyone with a matchup to play in that round.
+ *   r1    → all 8 seeds (nobody's eliminated yet).
+ *   sf    → the 4 winners of r1.
+ *   final → the 2 winners of the semi-finals.
+ *
+ * `ready` is false when the round's entrants aren't fully known yet (a prior
+ * round hasn't resolved), so callers can hold off — e.g. don't email
+ * semi-finalists until the quarter-finals have actually decided who they are.
+ */
+export function survivorsForRound(
+  b: Bracket,
+  round: FriendBracketRound,
+): { ready: boolean; teams: BracketTeam[] } {
+  if (round === "r1") {
+    return { ready: b.seeds.length >= 2, teams: b.seeds };
+  }
+  const matchups = round === "sf" ? b.sf : [b.final];
+  const teams: BracketTeam[] = [];
+  let ready = matchups.length > 0;
+  for (const m of matchups) {
+    if (!m.a || !m.b) {
+      ready = false;
+      continue;
+    }
+    teams.push(m.a, m.b);
+  }
+  return { ready, teams };
+}
+
 export interface SeedRow {
   uid: string;
   teamName: string;
